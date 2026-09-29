@@ -17,7 +17,7 @@ const USAGE = `tabularasa — archive, close and refocus Safari tabs
   tabularasa                   archive + close all tabs, reopen the relevant ones in a new window
   tabularasa archive           archive only (never closes)
   tabularasa close             archive + close, reopen nothing
-  tabularasa focus [flags]     dry run of the picker; --open opens them
+  tabularasa focus [flags]     dry run of the picker; --open opens them, --group one window per topic cluster
                                --topic "X" --days N --limit N --threshold P --context FILE
                                --no-calendar --no-github --no-reviews
   tabularasa topic "X" [--new] archive + close everything, then open archived tabs about X (last 90 days)
@@ -27,7 +27,7 @@ const USAGE = `tabularasa — archive, close and refocus Safari tabs
   tabularasa cleanup [--older 30] [--threshold 0.6] [--yes]
                                find outdated tabs (closed GitHub items, Jev-judged stale links unseen
                                for --older days) and pick which to delete; --yes deletes all without asking
-  tabularasa install [--close] [--reopen] [--hour 6]   LaunchAgent (daily) + Claude Code skill
+  tabularasa install [--close] [--reopen] [--group] [--hour 6]   LaunchAgent (daily) + Claude Code skill
   tabularasa uninstall
   tabularasa "free text"       anything else, e.g. "drop closed github issues and PRs", via Claude + the tab-focus skill
 
@@ -48,11 +48,11 @@ function doArchive(close) {
 
 async function doFocus(argv, extra = {}) {
   const { values } = parseArgs({ args: argv, options: {
-    open: { type: 'boolean' }, topic: { type: 'string' }, context: { type: 'string' }, days: { type: 'string' },
+    open: { type: 'boolean' }, group: { type: 'boolean' }, topic: { type: 'string' }, context: { type: 'string' }, days: { type: 'string' },
     limit: { type: 'string' }, threshold: { type: 'string' }, 'no-calendar': { type: 'boolean' },
     'no-github': { type: 'boolean' }, 'no-reviews': { type: 'boolean' } } });
   const num = (v, d) => (v == null ? d : Number(v));
-  return focus({ open: values.open, topic: values.topic, context: values.context ?? (freshContext() ? CTX : undefined),
+  return focus({ open: values.open, group: values.group, topic: values.topic, context: values.context ?? (freshContext() ? CTX : undefined),
     days: num(values.days, 7), limit: num(values.limit, 15), threshold: num(values.threshold, 0.6),
     calendar: !values['no-calendar'], github: !values['no-github'], reviews: !values['no-reviews'], ...extra });
 }
@@ -61,9 +61,9 @@ const [cmd, ...rest] = process.argv.slice(2);
 switch (cmd) {
   case undefined: doArchive(true).closed && await doFocus(rest, { open: true }); break;
   case 'morning': { // what the LaunchAgent runs
-    const close = rest.includes('--close'), reopen = rest.includes('--reopen');
+    const close = rest.includes('--close'), reopen = rest.includes('--reopen'), group = rest.includes('--group');
     const r = doArchive(close);
-    if (reopen && r.closed) await doFocus([], { open: true }).catch((e) => log(`warn: focus failed: ${e.message}`));
+    if (reopen && r.closed) await doFocus([], { open: true, group }).catch((e) => log(`warn: focus failed: ${e.message}`));
     break;
   }
   case 'archive': doArchive(false); break;
@@ -105,8 +105,8 @@ switch (cmd) {
     break;
   }
   case 'install': {
-    const { values } = parseArgs({ args: rest, options: { close: { type: 'boolean' }, reopen: { type: 'boolean' }, hour: { type: 'string' } } });
-    install({ close: values.close, reopen: values.reopen, hour: Number(values.hour ?? 6), bin: BIN });
+    const { values } = parseArgs({ args: rest, options: { close: { type: 'boolean' }, reopen: { type: 'boolean' }, group: { type: 'boolean' }, hour: { type: 'string' } } });
+    install({ close: values.close, reopen: values.reopen, group: values.group, hour: Number(values.hour ?? 6), bin: BIN });
     break;
   }
   case 'uninstall': uninstall(); break;

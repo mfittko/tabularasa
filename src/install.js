@@ -12,8 +12,8 @@ const SKILL_DST = path.join(os.homedir(), '.claude/skills/tab-focus');
 const domain = () => `gui/${os.userInfo().uid}`;
 const launchctl = (...a) => execFileSync('launchctl', a, { stdio: 'inherit' });
 
-export function plistXml({ close = false, reopen = false, bin, hour = 6 }) {
-  const args = ['morning', ...(close ? ['--close'] : []), ...(reopen ? ['--reopen'] : [])];
+export function plistXml({ close = false, reopen = false, group = false, bin, hour = 6 }) {
+  const args = ['morning', ...(close ? ['--close'] : []), ...(reopen ? ['--reopen'] : []), ...(group ? ['--group'] : [])];
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -33,15 +33,15 @@ export function plistXml({ close = false, reopen = false, bin, hour = 6 }) {
 }
 
 /** LaunchAgent at 06:00 running `tabularasa morning [--close] [--reopen]`, plus the Claude Code skill. */
-export function install({ close = false, reopen = false, bin, hour = 6 }) {
+export function install({ close = false, reopen = false, group = false, bin, hour = 6 }) {
   fs.mkdirSync(path.dirname(PLIST), { recursive: true });
   fs.mkdirSync(DIR, { recursive: true });
-  fs.writeFileSync(PLIST, plistXml({ close, reopen, bin, hour }));
+  fs.writeFileSync(PLIST, plistXml({ close, reopen, group, bin, hour }));
   try { launchctl('bootout', domain(), PLIST); } catch {}
   launchctl('bootstrap', domain(), PLIST);
   fs.rmSync(SKILL_DST, { recursive: true, force: true });
   fs.cpSync(SKILL_SRC, SKILL_DST, { recursive: true });
-  console.log(`Installed ${LABEL} (daily ${String(hour).padStart(2, '0')}:00, close=${close}, reopen=${reopen}); skill at ${SKILL_DST}`);
+  console.log(`Installed ${LABEL} (daily ${String(hour).padStart(2, '0')}:00, close=${close}, reopen=${reopen}, group=${group}); skill at ${SKILL_DST}`);
   console.log(`Test it now:  launchctl kickstart ${domain()}/${LABEL} && tail ${DIR}/tab-archive.log`);
 }
 

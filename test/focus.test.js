@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { openDb } from '../src/db.js';
-import { calendarTexts, focus, githubTexts, ingestReviews, normUrl, pick } from '../src/focus.js';
+import { calendarTexts, focus, githubTexts, ingestReviews, normUrl, pick, windows } from '../src/focus.js';
 
 test('normUrl strips tracking params, share keys, www, fragment and trailing slash', () => {
   assert.equal(normUrl('https://www.Example.com/a/b/?utm_source=x&sk=y&q=1#frag'), 'https://example.com/a/b?q=1');
@@ -85,6 +85,14 @@ test('pick: linked first, threshold, exact and Jev duplicates dropped, similar t
   const i = titles.findIndex((t) => t.startsWith('Knowledge'));
   assert.ok(titles[i + 1].startsWith('Knowledge'), `knowledge graph tabs adjacent: ${titles}`);
   assert.equal(calls[0], 7, 'one relevance question per non-linked candidate');
+  const kgGroups = new Set(picks.filter((p) => p.title.startsWith('Knowledge')).map((p) => p.group));
+  assert.equal(kgGroups.size, 1, 'knowledge graph tabs share a group');
+  assert.ok(new Set(picks.map((p) => p.group)).size > 1, 'unrelated tabs get their own group');
+  assert.deepEqual(windows(picks, false).length, 1);
+  assert.ok(windows(picks, true).length > 1 && windows(picks, true).length <= new Set(picks.map((p) => p.group)).size);
+  assert.deepEqual(windows([], true), []);
+  const w = windows([{ group: 0, t: 'a' }, { group: 0, t: 'b' }, { group: 1, t: 'c' }, { group: 2, t: 'd' }], true);
+  assert.deepEqual(w.map((x) => x.map((p) => p.t)), [['a', 'b'], ['c', 'd']], 'singletons share one trailing window');
 
   const limited = await pick(tabs, texts, fakeJev({ relevant: /./ }), { limit: 2 });
   assert.equal(limited.length, 2);

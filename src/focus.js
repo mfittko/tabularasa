@@ -91,7 +91,7 @@ const DUP_Q = 'Do these two browser tabs show the same underlying content (the s
 const SIM_Q = 'Are these two browser tabs about the same topic or piece of work? ';
 
 /** Pairwise: drop duplicates (lower-scored one), then chain nearest neighbours so related tabs sit together. */
-async function order(ask, picks, dupThreshold = 0.4) { // ponytail: 0.4 measured against control pairs (<= 0.19)
+async function order(ask, picks, dupThreshold = 0.4, groupCut = 0.5) { // ponytail: 0.4 measured against control pairs (<= 0.19)
   const n = picks.length;
   const pairs = [];
   for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) pairs.push([i, j]);
@@ -116,7 +116,12 @@ async function order(ask, picks, dupThreshold = 0.4) { // ponytail: 0.4 measured
     const next = [...left].sort((a, b) => (sim.get(`${last},${b}`) - sim.get(`${last},${a}`)) || (picks[b].score - picks[a].score))[0];
     out.push(next); left.delete(next);
   }
-  return out.map((i) => picks[i]);
+  // groups: cut the chain where neighbours stop being about the same work
+  let group = 0;
+  return out.map((i, k) => {
+    if (k > 0 && sim.get(`${out[k - 1]},${i}`) < groupCut) group++;
+    return { ...picks[i], group };
+  });
 }
 
 /** Rank candidate tabs against context texts. `ask(state, questions)` answers Jev questions. */
@@ -131,7 +136,16 @@ export async function pick(tabs, texts, ask, { threshold = 0.6, limit = 15 } = {
   for (const p of [...linked, ...judged].sort((a, b) => b.score - a.score)) { // exact dupes (share params); Jev handles the rest
     if (picks.length < limit && !seen.has(normUrl(p.url))) { seen.add(normUrl(p.url)); picks.push(p); }
   }
-  return picks.length > 2 ? order(ask, picks) : picks;
+  return picks.length > 2 ? order(ask, picks) : picks.map((p) => ({ ...p, group: 0 }));
+}
+
+/** Split ordered picks into windows: one per group when grouping (singletons share one trailing
+ *  window), otherwise a single window. */
+export function windows(picks, group) {
+  if (!group) return picks.length ? [picks] : [];
+  const groups = [...Map.groupBy(picks, (p) => p.group).values()];
+  const singles = groups.filter((g) => g.length === 1).flat();
+  return [...groups.filter((g) => g.length > 1), ...(singles.length ? [singles] : [])];
 }
 
 export function openInNewWindow(urls) {
@@ -143,7 +157,7 @@ export function openInNewWindow(urls) {
 
 /** The whole focus flow. Returns the picks; prints progress to stderr-ish lines via `log`. */
 export async function focus({ topic, context, days = 7, limit = 15, threshold = 0.6, calendar = true, github = true, reviews = true,
-  open = false, db = openDb(), ask, log = console.log } = {}) {
+  open = false, group = false, db = openDb(), ask, log = console.log } = {}) {
   const texts = [];
   if (topic) texts.push('topic: ' + topic);
   if (context) texts.push(...fs.readFileSync(context, 'utf8').split('\n').map((l) => l.trim()).filter(Boolean));
@@ -164,8 +178,15 @@ export async function focus({ topic, context, days = 7, limit = 15, threshold = 
   log(`candidates: ${tabs.length}`);
 
   const picks = await pick(tabs, texts, ask, { threshold, limit });
-  for (const p of picks) log(`${p.score.toFixed(2)}  ${p.reason.padEnd(6)}  ${p.title || p.url}`);
+  const wins = windows(picks, group);
+  wins.forEach((w, i) => {
+    if (group) log(`${i ? '\n' : ''}window ${i + 1}`);
+    for (const p of w) log(`${p.score.toFixed(2)}  ${p.reason.padEnd(6)}  ${p.title || p.url}`);
+  });
   if (!picks.length) log('no matching tabs');
-  else if (open) { openInNewWindow(picks.map((p) => p.url)); log(`opened ${picks.length} tabs in a new window`); }
+  else if (open) {
+    for (const w of wins) openInNewWindow(w.map((p) => p.url));
+    log(`opened ${picks.length} tabs in ${wins.length} window${wins.length > 1 ? 's' : ''}`);
+  }
   return picks;
 }

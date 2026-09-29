@@ -31,6 +31,7 @@ tabularasa archive                # archive only, never closes
 tabularasa close                  # archive + close, reopen nothing
 tabularasa focus                  # dry run: what would be reopened, with probability and reason
 tabularasa focus --open --limit 25 --threshold 0.75
+tabularasa focus --open --group      # one Safari window per topic cluster (singletons share one window)
 tabularasa topic "knowledge graph"        # archive + close everything, open tabs about a topic (90 days) in a new window
 tabularasa topic "knowledge graph" --new  # same, but keep the current windows open
 tabularasa search playwright      # find archived tabs by title or url
@@ -56,7 +57,10 @@ picks up automatically.
 4. Pairwise pass over the picks, two questions per pair: "same underlying content?" drops the
    lower-scored duplicate (threshold 0.4, measured against control pairs at or below 0.19), and
    "same piece of work?" orders the tabs as a nearest-neighbour chain so related tabs sit together.
-5. `--open` creates one new Safari window via AppleScript with the picks as tabs.
+5. `--open` creates one new Safari window via AppleScript with the picks as tabs. With `--group`
+   the chain is cut where neighbour similarity drops below 0.5 and each cluster gets its own window;
+   clusters of one tab share a trailing window. `tabularasa install --close --reopen --group` does
+   this every morning.
 
 About 12 seconds and 3 Jev requests for 130 candidates.
 
