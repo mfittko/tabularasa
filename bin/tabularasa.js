@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
-import { archive } from '../src/archive.js';
+import { archive, safariRunning } from '../src/archive.js';
 import { DB_FILE, openDb } from '../src/db.js';
 import { cleanupCandidates, deleteLinks, fmt, selectInteractive } from '../src/cleanup.js';
 import { askJev, focus, jevKey } from '../src/focus.js';
@@ -20,8 +20,8 @@ const USAGE = `tabularasa — archive, close and refocus Safari tabs
   tabularasa focus [flags]     dry run of the picker; --open opens them
                                --topic "X" --days N --limit N --threshold P --context FILE
                                --no-calendar --no-github --no-reviews
-  tabularasa topic "X" [--close]   open archived tabs about X (last 90 days) in a new window; X is the only
-                               context. --close archives and closes everything else first
+  tabularasa topic "X" [--new] archive + close everything, then open archived tabs about X (last 90 days)
+                               in a new window; X is the only context. --new keeps current windows open
   tabularasa search TERM       find archived tabs by title or url
   tabularasa forget TERM       delete archived tabs whose title or url contains TERM
   tabularasa cleanup [--older 30] [--threshold 0.6] [--yes]
@@ -70,9 +70,9 @@ switch (cmd) {
   case 'close': doArchive(true); break;
   case 'focus': await doFocus(rest); break;
   case 'topic': { // the topic is the whole context: no calendar, GitHub or session context mixed in
-    const close = rest.includes('--close');
-    const words = rest.filter((w) => w !== '--close');
-    if (close && !doArchive(true).closed) break; // nothing archived, nothing closed: don't reopen on top
+    const keep = rest.includes('--new'); // --new: leave current windows alone, just add a window
+    const words = rest.filter((w) => w !== '--new');
+    if (!keep && !doArchive(true).closed && safariRunning()) break; // Safari has tabs but nothing was archived: don't pile on
     await doFocus(['--topic', words.join(' '), '--days', '90', '--open', '--no-calendar', '--no-github', '--no-reviews'], { context: undefined });
     break;
   }
