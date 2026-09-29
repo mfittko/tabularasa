@@ -14,7 +14,7 @@ import { install, uninstall } from '../src/install.js';
 
 const USAGE = `tabularasa — archive, close and refocus Safari tabs
 
-  tabularasa                   archive + close all tabs, reopen the relevant ones in a new window
+  tabularasa [--group] [focus flags]   archive + close all tabs, reopen the relevant ones in a new window
   tabularasa archive           archive only (never closes)
   tabularasa close             archive + close, reopen nothing
   tabularasa focus [flags]     dry run of the picker; --open opens them, --group one window per topic cluster
@@ -57,7 +57,8 @@ async function doFocus(argv, extra = {}) {
     calendar: !values['no-calendar'], github: !values['no-github'], reviews: !values['no-reviews'], ...extra });
 }
 
-const [cmd, ...rest] = process.argv.slice(2);
+let [cmd, ...rest] = process.argv.slice(2);
+if (cmd?.startsWith('--')) { rest.unshift(cmd); cmd = undefined; } // `tabularasa --group` = default command with flags
 switch (cmd) {
   case undefined: doArchive(true).closed && await doFocus(rest, { open: true }); break;
   case 'morning': { // what the LaunchAgent runs
