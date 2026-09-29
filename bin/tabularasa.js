@@ -46,11 +46,14 @@ function doArchive(close) {
   return r;
 }
 
+// parsed up front so a typo in a flag fails before anything is archived or closed
+const focusFlags = (argv) => parseArgs({ args: argv, options: {
+  open: { type: 'boolean' }, group: { type: 'boolean' }, topic: { type: 'string' }, context: { type: 'string' }, days: { type: 'string' },
+  limit: { type: 'string' }, threshold: { type: 'string' }, 'no-calendar': { type: 'boolean' },
+  'no-github': { type: 'boolean' }, 'no-reviews': { type: 'boolean' } } }).values;
+
 async function doFocus(argv, extra = {}) {
-  const { values } = parseArgs({ args: argv, options: {
-    open: { type: 'boolean' }, group: { type: 'boolean' }, topic: { type: 'string' }, context: { type: 'string' }, days: { type: 'string' },
-    limit: { type: 'string' }, threshold: { type: 'string' }, 'no-calendar': { type: 'boolean' },
-    'no-github': { type: 'boolean' }, 'no-reviews': { type: 'boolean' } } });
+  const values = focusFlags(argv);
   const num = (v, d) => (v == null ? d : Number(v));
   return focus({ open: values.open, group: values.group, topic: values.topic, context: values.context ?? (freshContext() ? CTX : undefined),
     days: num(values.days, 7), limit: num(values.limit, 15), threshold: num(values.threshold, 0.6),
@@ -60,9 +63,11 @@ async function doFocus(argv, extra = {}) {
 let [cmd, ...rest] = process.argv.slice(2);
 if (cmd?.startsWith('--')) { rest.unshift(cmd); cmd = undefined; } // `tabularasa --group` = default command with flags
 switch (cmd) {
-  case undefined: doArchive(true).closed && await doFocus(rest, { open: true }); break;
+  case undefined: focusFlags(rest); doArchive(true).closed && await doFocus(rest, { open: true }); break;
   case 'morning': { // what the LaunchAgent runs
     const close = rest.includes('--close'), reopen = rest.includes('--reopen'), group = rest.includes('--group');
+    const unknown = rest.filter((f) => !['--close', '--reopen', '--group'].includes(f));
+    if (unknown.length) { console.error(`morning: unknown flag ${unknown[0]}`); process.exit(2); }
     const r = doArchive(close);
     if (reopen && r.closed) await doFocus([], { open: true, group }).catch((e) => log(`warn: focus failed: ${e.message}`));
     break;
@@ -73,6 +78,8 @@ switch (cmd) {
   case 'topic': { // the topic is the whole context: no calendar, GitHub or session context mixed in
     const keep = rest.includes('--new'); // --new: leave current windows alone, just add a window
     const words = rest.filter((w) => w !== '--new');
+    const bad = words.find((w) => w.startsWith('--'));
+    if (bad) { console.error(`topic: unknown flag ${bad}`); process.exit(2); }
     if (!keep && !doArchive(true).closed && safariRunning()) break; // Safari has tabs but nothing was archived: don't pile on
     await doFocus(['--topic', words.join(' '), '--days', '90', '--open', '--no-calendar', '--no-github', '--no-reviews'], { context: undefined });
     break;
