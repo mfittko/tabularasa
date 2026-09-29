@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // tabularasa — archive, close and refocus Safari tabs.
 import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
@@ -19,7 +19,7 @@ const USAGE = `tabularasa — archive, close and refocus Safari tabs
   tabularasa focus [flags]     dry run of the picker; --open opens them
                                --topic "X" --days N --limit N --threshold P --context FILE
                                --no-calendar --no-github --no-reviews
-  tabularasa topic "X"         open archived tabs about X (last 90 days) in a new window
+  tabularasa topic "X"         open archived tabs about X (last 90 days) in a new window; X is the only context
   tabularasa search TERM       find archived tabs by title or url
   tabularasa forget TERM       delete archived tabs whose title or url contains TERM
   tabularasa install [--close] [--reopen] [--hour 6]   LaunchAgent (daily) + Claude Code skill
@@ -31,6 +31,8 @@ Archive: ${DB_FILE}`;
 const CTX = path.join(path.dirname(DB_FILE), 'context.txt');
 const BIN = fileURLToPath(import.meta.url);
 const stamp = () => new Date().toLocaleString('sv').replace('T', ' ');
+// context.txt is written by the tab-focus skill in a Claude session; ignore it once it is a day old
+const freshContext = () => existsSync(CTX) && Date.now() - statSync(CTX).mtimeMs < 864e5;
 const log = (m) => console.log(`${stamp()} ${m}`);
 
 function doArchive(close) {
@@ -45,7 +47,7 @@ async function doFocus(argv, extra = {}) {
     limit: { type: 'string' }, threshold: { type: 'string' }, 'no-calendar': { type: 'boolean' },
     'no-github': { type: 'boolean' }, 'no-reviews': { type: 'boolean' } } });
   const num = (v, d) => (v == null ? d : Number(v));
-  return focus({ open: values.open, topic: values.topic, context: values.context ?? (existsSync(CTX) ? CTX : undefined),
+  return focus({ open: values.open, topic: values.topic, context: values.context ?? (freshContext() ? CTX : undefined),
     days: num(values.days, 7), limit: num(values.limit, 15), threshold: num(values.threshold, 0.6),
     calendar: !values['no-calendar'], github: !values['no-github'], reviews: !values['no-reviews'], ...extra });
 }
@@ -62,7 +64,8 @@ switch (cmd) {
   case 'archive': doArchive(false); break;
   case 'close': doArchive(true); break;
   case 'focus': await doFocus(rest); break;
-  case 'topic': await doFocus(['--topic', rest.join(' '), '--days', '90', '--open']); break;
+  case 'topic': // the topic is the whole context: no calendar, GitHub or session context mixed in
+    await doFocus(['--topic', rest.join(' '), '--days', '90', '--open', '--no-calendar', '--no-github', '--no-reviews'], { context: undefined }); break;
   case 'search': {
     const like = `%${rest.join(' ')}%`;
     for (const r of openDb().prepare('SELECT last_seen, times_seen, title, url FROM links WHERE title LIKE ? OR url LIKE ? ORDER BY last_seen DESC LIMIT 50').all(like, like))

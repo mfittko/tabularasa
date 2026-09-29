@@ -31,10 +31,10 @@ const day = (offset) => new Date(Date.now() + offset * 864e5).toISOString().slic
 
 // ---- context sources -------------------------------------------------------
 
-export function calendarTexts(daysBack = 1, daysAhead = 1) {
+export function calendarTexts(daysBack = 1, daysAhead = 1, run = runJson) {
   const params = { calendarId: 'primary', singleEvents: true, maxResults: 100, orderBy: 'startTime',
     timeMin: `${day(-daysBack)}T00:00:00Z`, timeMax: `${day(daysAhead)}T23:59:59Z` };
-  const data = runJson('gws', ['calendar', 'events', 'list', '--params', JSON.stringify(params)]);
+  const data = run('gws', ['calendar', 'events', 'list', '--params', JSON.stringify(params)]);
   const texts = [];
   for (const ev of data.items ?? []) {
     if ((ev.eventType ?? 'default') !== 'default') continue;
@@ -46,18 +46,18 @@ export function calendarTexts(daysBack = 1, daysAhead = 1) {
   return texts;
 }
 
-export function githubTexts(days) {
+export function githubTexts(days, run = runJson) {
   const texts = [];
   for (const kind of ['prs', 'issues']) {
-    const items = runJson('gh', ['search', kind, '--involves', '@me', '--updated', `>=${day(-days)}`, '--limit', '30', '--json', 'title,url']);
+    const items = run('gh', ['search', kind, '--involves', '@me', '--updated', `>=${day(-days)}`, '--limit', '30', '--json', 'title,url']);
     texts.push(...items.map((i) => `${kind.slice(0, -1)}: ${i.title} ${i.url}`));
   }
   return texts;
 }
 
 /** Open PRs awaiting my review become archive links, so they compete as candidates like any tab. */
-export function ingestReviews(db) {
-  const items = runJson('gh', ['search', 'prs', '--review-requested', '@me', '--state', 'open', '--limit', '50', '--json', 'title,url']);
+export function ingestReviews(db, run = runJson) {
+  const items = run('gh', ['search', 'prs', '--review-requested', '@me', '--state', 'open', '--limit', '50', '--json', 'title,url']);
   const at = now();
   const up = db.prepare(`INSERT INTO links (url, title, first_seen, last_seen) VALUES (?, ?, ?, ?)
     ON CONFLICT(url) DO UPDATE SET last_seen = excluded.last_seen, title = excluded.title`);

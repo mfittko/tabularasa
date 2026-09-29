@@ -31,18 +31,24 @@ return out`;
 
 export const safariRunning = () => spawnSync('pgrep', ['-xq', 'Safari']).status === 0;
 
-/** Every open http(s) tab, or [] when Safari isn't running (never launches it). */
-export function exportTabs() {
-  if (!safariRunning()) return [];
-  const out = execFileSync('osascript', ['-e', EXPORT], { encoding: 'utf8', maxBuffer: 64 << 20 });
+/** Records from the AppleScript output; only http(s) tabs, trailing newline ignored. */
+export function parseExport(out) {
   return out.replace(/\n/g, '').split('\x1e').filter(Boolean).map((r) => {
     const [wid, wi, ti, cur, url, title] = r.split('\x1f');
     return { window_id: +wid, window_index: +wi, tab_index: +ti, is_current: +cur, url, title: title ?? '', source: 'safari' };
   }).filter((t) => /^https?:/.test(t.url));
 }
 
+/** Every open http(s) tab, or [] when Safari isn't running (never launches it). */
+export function exportTabs() {
+  if (!safariRunning()) return [];
+  return parseExport(execFileSync('osascript', ['-e', EXPORT], { encoding: 'utf8', maxBuffer: 64 << 20 }));
+}
+
+export const closeWindows = () => execFileSync('osascript', ['-e', 'tell application "Safari" to close every window']);
+
 /** Archive tabs into the inventory; close Safari windows only after the write committed. */
-export function archive({ close = false, db = openDb(), tabs = exportTabs() } = {}) {
+export function archive({ close = false, db = openDb(), tabs = exportTabs(), closer = closeWindows, running = safariRunning } = {}) {
   const at = now();
   db.exec('BEGIN');
   let runId, newLinks = 0;
@@ -70,8 +76,8 @@ export function archive({ close = false, db = openDb(), tabs = exportTabs() } = 
     throw e;
   }
   let closed = 0;
-  if (close && tabs.length && safariRunning()) {
-    execFileSync('osascript', ['-e', 'tell application "Safari" to close every window']);
+  if (close && tabs.length && running()) {
+    closer();
     closed = 1;
   }
   db.prepare('UPDATE runs SET new_links = ?, closed = ? WHERE id = ?').run(newLinks, closed, runId);
