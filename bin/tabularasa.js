@@ -11,7 +11,7 @@ import { DB_FILE, openDb } from '../src/db.js';
 import { cleanupCandidates, deleteLinks, fmt } from '../src/cleanup.js';
 import { selectInteractive } from '../src/picker.js';
 import { fmtRun, fmtTab, listRuns, restore, runTabs } from '../src/restore.js';
-import { askJev, focus, jevKey } from '../src/focus.js';
+import { askJev, explain, focus, jevKey } from '../src/focus.js';
 import { install, uninstall } from '../src/install.js';
 
 const USAGE = `tabularasa — archive, close and refocus Safari tabs
@@ -26,6 +26,7 @@ const USAGE = `tabularasa — archive, close and refocus Safari tabs
                                in a new window; X is the only context. --new keeps current windows open
   tabularasa search TERM       find archived tabs by title or url
   tabularasa forget TERM       delete archived tabs whose title or url contains TERM
+  tabularasa why URL|TERM [focus flags]   explain why a tab would or wouldn't be reopened right now
   tabularasa runs [N]          list the last N archive runs (default 20)
   tabularasa restore [ID] [--pick]   reopen every tab of a run, one window per original window;
                                no ID: choose the run interactively; --pick: choose tabs too
@@ -99,6 +100,15 @@ switch (cmd) {
     const like = `%${rest.join(' ')}%`, db = openDb();
     db.prepare('DELETE FROM tabs WHERE link_id IN (SELECT id FROM links WHERE title LIKE ? OR url LIKE ?)').run(like, like);
     console.log(`deleted ${db.prepare('DELETE FROM links WHERE title LIKE ? OR url LIKE ?').run(like, like).changes} links`);
+    break;
+  }
+  case 'why': {
+    const term = rest.find((a) => !a.startsWith('--'));
+    if (!term) { console.error('why: pass a URL or a title fragment'); process.exit(2); }
+    const v = focusFlags(rest.filter((a) => a !== term));
+    const num = (x, d) => (x == null ? d : Number(x));
+    await explain(term, { topic: v.topic, context: v.context ?? (freshContext() ? CTX : undefined), days: num(v.days, 7),
+      threshold: num(v.threshold, 0.6), calendar: !v['no-calendar'], github: !v['no-github'] });
     break;
   }
   case 'runs': listRuns(openDb(), Number(rest[0] ?? 20)).forEach((r) => console.log(fmtRun(r))); break;

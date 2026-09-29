@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { openDb } from '../src/db.js';
-import { calendarTexts, focus, githubTexts, ingestReviews, normUrl, pick, windows } from '../src/focus.js';
+import { calendarTexts, explain, focus, githubTexts, ingestReviews, normUrl, pick, windows } from '../src/focus.js';
 
 test('normUrl strips tracking params, share keys, www, fragment and trailing slash', () => {
   assert.equal(normUrl('https://www.Example.com/a/b/?utm_source=x&sk=y&q=1#frag'), 'https://example.com/a/b?q=1');
@@ -126,4 +126,27 @@ test('focus: topic + archive candidates within --days, output format', async () 
   const picks = await focus({ db, topic: 'knowledge graph', calendar: false, github: false, reviews: false, ask: fakeJev(), log: (m) => lines.push(m) });
   assert.equal(picks.length, 1, 'stale link is not a candidate');
   assert.deepEqual(lines, ['candidates: 1', '0.80  jev     Knowledge Graph RFC']);
+});
+
+test('explain: candidate status, linked vs Jev verdict, evidence lines', async () => {
+  const db = openDb(':memory:');
+  const ins = db.prepare('INSERT INTO links (url, title, first_seen, last_seen) VALUES (?, ?, ?, ?)');
+  const fresh = new Date().toISOString();
+  ins.run('https://docs.example/kg', 'Knowledge Graph RFC', fresh, fresh);
+  ins.run('https://github.com/o/r/pull/1', 'PR 1', '2020-01-01T00:00:00Z', '2020-01-01T00:00:00Z');
+  const lines = [];
+  const log = (m) => lines.push(m);
+  const ask = fakeJev({ relevant: /Knowledge/ });
+
+  const a = await explain('Knowledge', { db, ask, log, topic: 'knowledge graph sync https://github.com/o/r/pull/1', calendar: false, github: false });
+  assert.deepEqual([a.candidate, a.linked, a.score], [true, false, 0.8]);
+  assert.ok(lines.some((l) => /jev: 0.80 >= threshold 0.6/.test(l)) && lines.some((l) => /^would be picked/.test(l)));
+  assert.ok(lines.some((l) => /\[knowledge, graph\] topic: knowledge graph sync/.test(l)), lines.join('|'));
+
+  lines.length = 0;
+  const b = await explain('https://github.com/o/r/pull/1', { db, ask, log, topic: 'see https://github.com/o/r/pull/1', calendar: false, github: false });
+  assert.deepEqual([b.candidate, b.linked, b.score], [false, true, 1]);
+  assert.ok(lines.some((l) => /candidate: no/.test(l)) && lines.some((l) => /not a candidate, so would be picked/.test(l)));
+
+  assert.equal(await explain('nope', { db, ask, log, calendar: false, github: false }), null);
 });

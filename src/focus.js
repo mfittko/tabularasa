@@ -155,9 +155,8 @@ export function openInNewWindow(urls) {
   execFileSync('osascript', ['-e', script]);
 }
 
-/** The whole focus flow. Returns the picks; prints progress to stderr-ish lines via `log`. */
-export async function focus({ topic, context, days = 7, limit = 15, threshold = 0.6, calendar = true, github = true, reviews = true,
-  open = false, group = false, db = openDb(), ask, log = console.log } = {}) {
+/** Context lines from topic, context file, calendar and GitHub, each source best effort. */
+export function gatherContext({ topic, context, days = 7, calendar = true, github = true, log = console.log } = {}) {
   const texts = [];
   if (topic) texts.push('topic: ' + topic);
   if (context) texts.push(...fs.readFileSync(context, 'utf8').split('\n').map((l) => l.trim()).filter(Boolean));
@@ -165,10 +164,47 @@ export async function focus({ topic, context, days = 7, limit = 15, threshold = 
     if (!on) continue;
     try { const t = fn(); texts.push(...t); log(`${name}: ${t.length} items`); } catch (e) { console.error(`${name}: skipped (${String(e.message).slice(0, 120)})`); }
   }
-  if (!texts.length) { log('no context available, nothing to reopen'); return []; }
+  return texts;
+}
+
+/** The configured Jev asker, or the injected one. */
+export function asker(ask) {
+  if (ask) return ask;
   const key = jevKey();
-  if (!ask && !key) throw new Error('no TYPESAFE_API_KEY (env or ~/.config/typesafe)');
-  ask ??= (state, questions) => askJev(key, state, questions);
+  if (!key) throw new Error('no TYPESAFE_API_KEY (env or ~/.config/typesafe)');
+  return (state, questions) => askJev(key, state, questions);
+}
+
+/** Why a tab is or isn't picked: candidate status, linked/Jev score, and the context lines that share words with it. */
+export async function explain(term, { threshold = 0.6, days = 7, db = openDb(), ask, log = console.log, ...ctx } = {}) {
+  const link = db.prepare('SELECT url, title, last_seen, times_seen FROM links WHERE url = ? OR title LIKE ? OR url LIKE ? ORDER BY last_seen DESC LIMIT 1')
+    .get(term, `%${term}%`, `%${term}%`);
+  if (!link) { log(`not in the archive: ${term}`); return null; }
+  const texts = gatherContext({ days, log, ...ctx });
+  log(`\n${link.title || link.url}\n${link.url}\nlast seen ${link.last_seen.slice(0, 16)}, in ${link.times_seen} runs`);
+  const since = new Date(Date.now() - days * 864e5).toISOString();
+  const candidate = link.last_seen >= since;
+  log(candidate ? `candidate: yes (seen within ${days} days)` : `candidate: no (not seen within ${days} days; raise --days)`);
+  if (!texts.length) { log('context: none'); return { link, candidate, score: null }; }
+  const blob = texts.join('\n').slice(0, 20000);
+  const linked = new Set((blob.match(URL_RE) ?? []).map(normUrl)).has(normUrl(link.url));
+  const score = linked ? 1 : (await relevance(asker(ask), blob, [link]))[0];
+  const verdict = linked ? 'linked: a context line contains this URL' : `jev: ${score.toFixed(2)} ${score >= threshold ? '>=' : '<'} threshold ${threshold}`;
+  log(`${verdict}\n${!candidate ? 'not a candidate, so ' : ''}${linked || score >= threshold ? 'would be picked' : 'would not be picked'}`);
+  const words = new Set((link.title || '').toLowerCase().match(/[\p{L}\d][\p{L}\d_.-]{3,}/gu) ?? []);
+  const evidence = texts.map((t) => [t, [...new Set(t.toLowerCase().match(/[\p{L}\d][\p{L}\d_.-]{3,}/gu) ?? [])].filter((w) => words.has(w))])
+    .filter(([, shared]) => shared.length).sort((a, b) => b[1].length - a[1].length).slice(0, 5);
+  log(evidence.length ? `\ncontext lines sharing words with the title:` : '\nno context line shares a word with the title');
+  for (const [t, shared] of evidence) log(`  [${shared.join(', ')}] ${t.slice(0, 110)}`);
+  return { link, candidate, linked, score };
+}
+
+/** The whole focus flow. Returns the picks; prints progress to stderr-ish lines via `log`. */
+export async function focus({ topic, context, days = 7, limit = 15, threshold = 0.6, calendar = true, github = true, reviews = true,
+  open = false, group = false, db = openDb(), ask, log = console.log } = {}) {
+  const texts = gatherContext({ topic, context, days, calendar, github, log });
+  if (!texts.length) { log('no context available, nothing to reopen'); return []; }
+  ask = asker(ask);
 
   if (reviews) {
     try { log(`reviews: ${ingestReviews(db)} PRs ingested`); } catch (e) { console.error(`reviews: skipped (${String(e.message).slice(0, 120)})`); }

@@ -34,6 +34,7 @@ tabularasa focus --open --limit 25 --threshold 0.75
 tabularasa focus --open --group      # one Safari window per topic cluster (singletons share one window)
 tabularasa topic "knowledge graph"        # archive + close everything, open tabs about a topic (90 days) in a new window
 tabularasa topic "knowledge graph" --new  # same, but keep the current windows open
+tabularasa why "Knowledge Graph"  # explain: candidate? linked? Jev score vs threshold, context lines that share words
 tabularasa runs                   # recent archive runs: id, time, tabs, windows, closed?
 tabularasa restore                # pick a run, reopen all its tabs, one window per original window
 tabularasa restore 25 --pick      # a specific run, choose which tabs come back
