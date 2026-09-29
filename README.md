@@ -11,7 +11,7 @@ Google Calendar, `gh` for GitHub, `claude` for free-text requests.
 ## Install
 
 ```bash
-npm install -g tabularasa              # or: npm install -g github:mfittko/tabularasa
+npm install -g @mfittko/tabularasa     # or: npm install -g github:mfittko/tabularasa
 tabularasa archive                     # first run: macOS asks whether Node may control Safari; allow it
 tabularasa install                     # daily 06:00 LaunchAgent, archive only, plus the Claude Code skill
 tabularasa install --close --reopen    # once you trust it: archive, close everything, reopen what's relevant
@@ -80,7 +80,7 @@ sqlite3 -column ~/.tab-archive/tabs.db "SELECT last_seen, title, url FROM links 
 
 ```bash
 tabularasa uninstall      # LaunchAgent + skill; keeps ~/.tab-archive
-npm unlink -g tabularasa
+npm unlink -g @mfittko/tabularasa
 ```
 
 ## Test
