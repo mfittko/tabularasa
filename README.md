@@ -11,11 +11,13 @@ Google Calendar, `gh` for GitHub, `claude` for free-text requests.
 ## Install
 
 ```bash
-git clone https://github.com/mfittko/tabularasa && cd tabularasa && npm link
+npm install -g tabularasa              # or: npm install -g github:mfittko/tabularasa
 tabularasa archive                     # first run: macOS asks whether Node may control Safari; allow it
 tabularasa install                     # daily 06:00 LaunchAgent, archive only, plus the Claude Code skill
 tabularasa install --close --reopen    # once you trust it: archive, close everything, reopen what's relevant
 ```
+
+For development: `git clone https://github.com/mfittko/tabularasa && cd tabularasa && npm link`.
 
 Jev key: `export TYPESAFE_API_KEY=...` in `~/.config/typesafe` (or the env var).
 
