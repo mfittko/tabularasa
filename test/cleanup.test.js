@@ -72,7 +72,7 @@ test('selectInteractive: toggle, move, select all, confirm and quit', async () =
   let p = selectInteractive(items, t);
   t.key('space'); t.key('down'); t.key('j'); t.key('space'); t.key('return');
   assert.deepEqual((await p).map((l) => l.id), [1, 3]);
-  assert.match(t.output.text, /> \[x\] r/);
+  assert.match(t.output.text, /> \[x\]/);
 
   t = fakeTty(); p = selectInteractive(items, t);
   t.key('a'); t.key('up'); t.key('space'); t.key('return');

@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
-import readline from 'node:readline';
 import { promisify } from 'node:util';
 import { cached } from './db.js';
+export { selectInteractive } from './picker.js';
 
 const execFileP = promisify(execFile);
 const H = 3600, D = 86400;
@@ -74,29 +74,3 @@ export function deleteLinks(db, ids) {
 }
 
 export const fmt = (l, w = process.stdout.columns || 120) => `${l.reason.padEnd(13)} ${l.last_seen.slice(0, 10)}  ${(l.title || l.url).slice(0, Math.max(20, w - 30))}`;
-
-/** Terminal picker: ↑↓/jk move, space toggles, a toggles all, enter confirms, q quits. Resolves to selected items. */
-export function selectInteractive(items, { input = process.stdin, output = process.stdout } = {}) {
-  return new Promise((resolve) => {
-    let cursor = 0;
-    const on = new Set();
-    const draw = () => {
-      readline.cursorTo(output, 0, 0); readline.clearScreenDown(output);
-      output.write(`${items.length} candidates. space: toggle  a: all  enter: delete selected  q: quit\n\n`);
-      items.forEach((l, i) => output.write(`${i === cursor ? '>' : ' '} [${on.has(i) ? 'x' : ' '}] ${fmt(l)}\n`));
-    };
-    const done = (result) => { input.setRawMode(false); input.pause(); input.off('keypress', onKey); output.write('\n'); resolve(result); };
-    const onKey = (_, k) => {
-      if (k.name === 'q' || (k.ctrl && k.name === 'c')) return done([]);
-      if (k.name === 'return') return done(items.filter((_, i) => on.has(i)));
-      if (k.name === 'up' || k.name === 'k') cursor = (cursor + items.length - 1) % items.length;
-      if (k.name === 'down' || k.name === 'j') cursor = (cursor + 1) % items.length;
-      if (k.name === 'space') on.has(cursor) ? on.delete(cursor) : on.add(cursor);
-      if (k.name === 'a') items.forEach((_, i) => (on.size === items.length ? on.delete(i) : on.add(i)));
-      draw();
-    };
-    readline.emitKeypressEvents(input);
-    input.setRawMode(true); input.resume(); input.on('keypress', onKey);
-    draw();
-  });
-}

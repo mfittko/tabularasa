@@ -8,7 +8,9 @@ import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { archive, safariRunning } from '../src/archive.js';
 import { DB_FILE, openDb } from '../src/db.js';
-import { cleanupCandidates, deleteLinks, fmt, selectInteractive } from '../src/cleanup.js';
+import { cleanupCandidates, deleteLinks, fmt } from '../src/cleanup.js';
+import { selectInteractive } from '../src/picker.js';
+import { fmtRun, fmtTab, listRuns, restore, runTabs } from '../src/restore.js';
 import { askJev, focus, jevKey } from '../src/focus.js';
 import { install, uninstall } from '../src/install.js';
 
@@ -24,6 +26,9 @@ const USAGE = `tabularasa — archive, close and refocus Safari tabs
                                in a new window; X is the only context. --new keeps current windows open
   tabularasa search TERM       find archived tabs by title or url
   tabularasa forget TERM       delete archived tabs whose title or url contains TERM
+  tabularasa runs [N]          list the last N archive runs (default 20)
+  tabularasa restore [ID] [--pick]   reopen every tab of a run, one window per original window;
+                               no ID: choose the run interactively; --pick: choose tabs too
   tabularasa cleanup [--older 30] [--threshold 0.6] [--yes]
                                find outdated tabs (closed GitHub items, Jev-judged stale links unseen
                                for --older days) and pick which to delete; --yes deletes all without asking
@@ -96,6 +101,26 @@ switch (cmd) {
     console.log(`deleted ${db.prepare('DELETE FROM links WHERE title LIKE ? OR url LIKE ?').run(like, like).changes} links`);
     break;
   }
+  case 'runs': listRuns(openDb(), Number(rest[0] ?? 20)).forEach((r) => console.log(fmtRun(r))); break;
+  case 'restore': {
+    const pickTabs = rest.includes('--pick');
+    let id = rest.find((a) => /^\d+$/.test(a));
+    const db = openDb();
+    if (!id) {
+      if (!process.stdin.isTTY) { console.error('restore: pass a run id (see `tabularasa runs`)'); process.exit(2); }
+      const runs = listRuns(db, 20);
+      const [chosen] = await selectInteractive(runs, { single: true, format: fmtRun, title: 'Which run?' });
+      if (!chosen) break;
+      id = chosen.id;
+    }
+    let tabs = runTabs(db, Number(id));
+    if (!tabs.length) { console.log(`run #${id} has no tabs`); break; }
+    if (pickTabs && process.stdin.isTTY) tabs = await selectInteractive(tabs, { preselect: true, format: fmtTab, title: `run #${id}: ${tabs.length} tabs` });
+    if (!tabs.length) break;
+    const r = restore(tabs);
+    console.log(`restored ${r.tabs} tabs in ${r.windows} window${r.windows > 1 ? 's' : ''} from run #${id}`);
+    break;
+  }
   case 'cleanup': {
     const { values } = parseArgs({ args: rest, options: { older: { type: 'string' }, threshold: { type: 'string' }, yes: { type: 'boolean' } } });
     const key = jevKey();
@@ -106,7 +131,7 @@ switch (cmd) {
     let chosen = items;
     if (!values.yes) {
       if (!process.stdin.isTTY) { items.forEach((l) => console.log(fmt(l))); console.log(`\n${items.length} candidates; rerun with --yes to delete them`); break; }
-      chosen = await selectInteractive(items);
+      chosen = await selectInteractive(items, { format: fmt, title: `${items.length} candidates` });
     }
     chosen.forEach((l) => console.log(`deleted  ${fmt(l)}`));
     console.log(`deleted ${deleteLinks(db, chosen.map((l) => l.id))} of ${items.length} candidates`);

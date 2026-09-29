@@ -34,6 +34,9 @@ tabularasa focus --open --limit 25 --threshold 0.75
 tabularasa focus --open --group      # one Safari window per topic cluster (singletons share one window)
 tabularasa topic "knowledge graph"        # archive + close everything, open tabs about a topic (90 days) in a new window
 tabularasa topic "knowledge graph" --new  # same, but keep the current windows open
+tabularasa runs                   # recent archive runs: id, time, tabs, windows, closed?
+tabularasa restore                # pick a run, reopen all its tabs, one window per original window
+tabularasa restore 25 --pick      # a specific run, choose which tabs come back
 tabularasa search playwright      # find archived tabs by title or url
 tabularasa forget dependabot      # delete archived tabs matching a term
 tabularasa "drop closed github issues and PRs"   # anything else: Claude Code runs the tab-focus skill
