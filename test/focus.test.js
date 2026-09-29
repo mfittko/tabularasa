@@ -125,7 +125,7 @@ test('focus: topic + archive candidates within --days, output format', async () 
   const lines = [];
   const picks = await focus({ db, topic: 'knowledge graph', calendar: false, github: false, reviews: false, ask: fakeJev(), log: (m) => lines.push(m) });
   assert.equal(picks.length, 1, 'stale link is not a candidate');
-  assert.deepEqual(lines, ['candidates: 1', '0.80  jev     Knowledge Graph RFC']);
+  assert.deepEqual(lines.filter((l) => !l.startsWith('dismissed:')), ['candidates: 1', '0.80  jev     Knowledge Graph RFC']);
 });
 
 test('explain: candidate status, linked vs Jev verdict, evidence lines', async () => {

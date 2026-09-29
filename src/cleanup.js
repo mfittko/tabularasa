@@ -59,9 +59,10 @@ async function jevStale(db, links, ask, threshold, batch = 40) {
 /** Candidates for deletion: closed GitHub items, then Jev-judged stale links older than `olderDays`. */
 export async function cleanupCandidates(db, { olderDays = 30, threshold = 0.6, ask, run = runJson, limit = 200 } = {}) {
   const muted = mutes(db), pinned = new Set(pins(db));
-  const all = db.prepare('SELECT id, url, title, last_seen, times_seen FROM links ORDER BY last_seen').all()
+  const all = db.prepare('SELECT id, url, title, last_seen, times_seen, dismissed_at FROM links ORDER BY last_seen').all()
     .filter((l) => !pinned.has(l.url) && !isMuted(l, muted)); // pinned stays, muted is yours to forget explicitly
-  const closed = await githubClosed(db, all, run);
+  const byYou = all.filter((l) => l.dismissed_at && l.dismissed_at >= l.last_seen).map((l) => ({ ...l, reason: `closed by you ${l.dismissed_at.slice(0, 10)}` }));
+  const closed = [...byYou, ...(await githubClosed(db, all.filter((l) => !byYou.some((b) => b.id === l.id)), run))];
   const taken = new Set(closed.map((l) => l.id));
   const since = new Date(Date.now() - olderDays * 864e5).toISOString();
   const aged = all.filter((l) => l.last_seen < since && !taken.has(l.id)).slice(0, limit);

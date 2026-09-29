@@ -40,6 +40,7 @@ tabularasa restore                # pick a run, reopen all its tabs, one window 
 tabularasa restore 25 --pick      # a specific run, choose which tabs come back
 tabularasa search playwright      # find archived tabs by title or url
 tabularasa forget dependabot      # delete archived tabs matching a term
+tabularasa dismissed              # tabs you closed by hand: never reopen, listed by cleanup; `undismiss` reverts
 tabularasa pin "Team dashboard"   # always reopen (own window when grouping); unpin to stop
 tabularasa mute youtube           # never reopen, cleanup leaves it alone; unmute to stop; `pins` lists both
 tabularasa "drop closed github issues and PRs"   # anything else: Claude Code runs the tab-focus skill
@@ -71,6 +72,17 @@ picks up automatically.
    this every morning.
 
 About 12 seconds and 3 Jev requests for 130 candidates.
+
+## Tabs you close by hand
+
+Safari keeps a list of recently closed tabs in `~/Library/Safari/RecentlyClosedTabs.plist`. Every
+`focus` and morning run reads it and marks archive links you closed since they were last archived as
+dismissed: they stop being reopen candidates and show up in `cleanup` as "closed by you". Nothing is
+deleted; `tabularasa undismiss TERM` reverts, and a tab seen open again clears it automatically.
+
+Reading that file needs Full Disk Access: System Settings → Privacy & Security → Full Disk Access,
+add the Node binary the LaunchAgent runs (`node -p process.execPath`) and your terminal app. Until
+then the scan is skipped with a one-line notice.
 
 ## Archive
 

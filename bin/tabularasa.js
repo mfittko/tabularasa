@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { archive, safariRunning } from '../src/archive.js';
 import { DB_FILE, openDb } from '../src/db.js';
 import { cleanupCandidates, deleteLinks, fmt } from '../src/cleanup.js';
+import { dismissed, scanClosed, undismiss } from '../src/closed.js';
 import { selectInteractive } from '../src/picker.js';
 import { mute, mutes, pin, pins, unmute, unpin } from '../src/prefs.js';
 import { fmtRun, fmtTab, listRuns, restore, runTabs } from '../src/restore.js';
@@ -31,6 +32,9 @@ const USAGE = `tabularasa — archive, close and refocus Safari tabs
   tabularasa pin URL|TERM      always reopen this tab (own window when grouping); unpin URL|TERM
   tabularasa mute TERM         never reopen tabs matching TERM, cleanup leaves them alone; unmute TERM
   tabularasa pins              list pins and mutes
+  tabularasa dismissed         tabs you closed by hand since they were last archived (read from Safari's
+                               recently-closed list; needs Full Disk Access); they don't reopen and show in cleanup
+  tabularasa undismiss URL|TERM   allow a dismissed tab to reopen again
   tabularasa why URL|TERM [focus flags]   explain why a tab would or wouldn't be reopened right now
   tabularasa runs [N]          list the last N archive runs (default 20)
   tabularasa restore [ID] [--pick]   reopen every tab of a run, one window per original window;
@@ -82,6 +86,7 @@ switch (cmd) {
     const unknown = rest.filter((f) => !['--close', '--reopen', '--group', '--ingest'].includes(f));
     if (unknown.length) { console.error(`morning: unknown flag ${unknown[0]}`); process.exit(2); }
     const r = doArchive(close);
+    log(scanClosed(openDb()));
     if (doIngest) await ingest(openDb(), { limit: 30, log }).catch((e) => log(`warn: ingest failed: ${e.message}`));
     if (reopen && r.closed) await doFocus([], { open: true, group }).catch((e) => log(`warn: focus failed: ${e.message}`));
     break;
@@ -144,6 +149,8 @@ switch (cmd) {
     await ingest(openDb(), { days: Number(values.days ?? 30), limit: Number(values.limit ?? 50), force: values.force });
     break;
   }
+  case 'dismissed': { const db = openDb(); console.log(scanClosed(db)); dismissed(db).forEach((l) => console.log(`${l.dismissed_at.slice(0, 16)}  ${l.title || l.url}`)); break; }
+  case 'undismiss': console.log(`undismissed ${undismiss(openDb(), rest.join(' '))}`); break;
   case 'pin': { const u = pin(openDb(), rest.join(' ')); console.log(u ? `pinned ${u}` : 'no archived tab matches'); break; }
   case 'unpin': console.log(`unpinned ${unpin(openDb(), rest.join(' '))}`); break;
   case 'mute': mute(openDb(), rest.join(' ')); console.log(`muted "${rest.join(' ')}"`); break;

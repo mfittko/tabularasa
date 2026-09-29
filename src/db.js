@@ -68,6 +68,9 @@ export function openDb(file = DB_FILE) {
   if (file !== ':memory:') fs.mkdirSync(path.dirname(file), { recursive: true });
   const db = new DatabaseSync(file);
   db.exec(SCHEMA);
+  // migrations: columns added after the first release
+  const cols = new Set(db.prepare('PRAGMA table_info(links)').all().map((c) => c.name));
+  if (!cols.has('dismissed_at')) db.exec('ALTER TABLE links ADD COLUMN dismissed_at TEXT');
   return db;
 }
 

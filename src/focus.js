@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { openDb, now } from './db.js';
+import { scanClosed } from './closed.js';
 import { isMuted, mutes, pins, withPins } from './prefs.js';
 
 const JEV_URL = 'https://api.typesafe.ai/v1/systemone';
@@ -181,7 +182,7 @@ export function asker(ask) {
 
 /** Why a tab is or isn't picked: candidate status, linked/Jev score, and the context lines that share words with it. */
 export async function explain(term, { threshold = 0.6, days = 7, db = openDb(), ask, log = console.log, ...ctx } = {}) {
-  const link = db.prepare(`SELECT l.url, l.title, l.last_seen, l.times_seen, nullif(trim(coalesce(p.description, '') || ' ' || coalesce(p.excerpt, '')), '') AS summary
+  const link = db.prepare(`SELECT l.url, l.title, l.last_seen, l.times_seen, l.dismissed_at, nullif(trim(coalesce(p.description, '') || ' ' || coalesce(p.excerpt, '')), '') AS summary
     FROM links l LEFT JOIN pages p ON p.link_id = l.id WHERE l.url = ? OR l.title LIKE ? OR l.url LIKE ? ORDER BY l.last_seen DESC LIMIT 1`)
     .get(term, `%${term}%`, `%${term}%`);
   if (!link) { log(`not in the archive: ${term}`); return null; }
@@ -189,8 +190,10 @@ export async function explain(term, { threshold = 0.6, days = 7, db = openDb(), 
   log(`\n${link.title || link.url}\n${link.url}\nlast seen ${link.last_seen.slice(0, 16)}, in ${link.times_seen} runs`);
   if (link.summary) log(`page: ${link.summary.slice(0, 200)}`);
   const since = new Date(Date.now() - days * 864e5).toISOString();
-  const candidate = link.last_seen >= since;
-  log(candidate ? `candidate: yes (seen within ${days} days)` : `candidate: no (not seen within ${days} days; raise --days)`);
+  const dismissedNow = link.dismissed_at && link.dismissed_at >= link.last_seen;
+  const candidate = link.last_seen >= since && !dismissedNow;
+  log(dismissedNow ? `candidate: no (you closed it ${link.dismissed_at.slice(0, 16)}; \`tabularasa undismiss\` to allow it again)`
+    : candidate ? `candidate: yes (seen within ${days} days)` : `candidate: no (not seen within ${days} days; raise --days)`);
   if (!texts.length) { log('context: none'); return { link, candidate, score: null }; }
   const blob = texts.join('\n').slice(0, 20000);
   const linked = new Set((blob.match(URL_RE) ?? []).map(normUrl)).has(normUrl(link.url));
@@ -217,8 +220,11 @@ export async function focus({ topic, context, days = 7, limit = 15, threshold = 
   }
   const since = new Date(Date.now() - days * 864e5).toISOString();
   const muted = mutes(db);
+  log(scanClosed(db));
   const tabs = db.prepare(`SELECT l.url, l.title, nullif(trim(coalesce(p.description, '') || ' ' || coalesce(p.excerpt, '')), '') AS summary
-    FROM links l LEFT JOIN pages p ON p.link_id = l.id WHERE l.last_seen >= ? ORDER BY l.last_seen DESC LIMIT 400`).all(since)
+    FROM links l LEFT JOIN pages p ON p.link_id = l.id
+    WHERE l.last_seen >= ? AND (l.dismissed_at IS NULL OR l.dismissed_at < l.last_seen)
+    ORDER BY l.last_seen DESC LIMIT 400`).all(since)
     .filter((t) => !isMuted(t, muted));
   const withPages = tabs.filter((t) => t.summary).length;
   log(`candidates: ${tabs.length}${withPages ? ` (${withPages} with page content)` : ''}${muted.length ? ` (${muted.length} mute terms)` : ''}`);
