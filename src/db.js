@@ -36,6 +36,14 @@ CREATE TABLE IF NOT EXISTS tabs (
 );
 CREATE INDEX IF NOT EXISTS tabs_run ON tabs(run_id);
 CREATE INDEX IF NOT EXISTS tabs_link ON tabs(link_id);
+CREATE TABLE IF NOT EXISTS pages (
+  link_id     INTEGER PRIMARY KEY REFERENCES links(id),
+  fetched_at  TEXT NOT NULL,
+  title       TEXT,
+  description TEXT,
+  excerpt     TEXT,
+  error       TEXT
+);
 CREATE TABLE IF NOT EXISTS cache (
   key        TEXT PRIMARY KEY,
   value      TEXT NOT NULL,

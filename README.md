@@ -56,7 +56,9 @@ picks up automatically.
    archive so they compete as candidates.
 2. Candidates: archive links seen in the last `--days` (7) days, at most 400.
 3. A tab whose URL appears in the context is `linked` (1.0). Every other candidate is one yes/no
-   question to Jev, "is this tab relevant to the state?", 40 per request. Keep those at or above
+   question to Jev, "is this tab relevant to the state?", 40 per request. When a page was ingested
+   (`tabularasa ingest`, or `install --ingest` for 30 new pages every morning), its description and
+   first 300 characters ride along in the question, which helps with generic titles. Keep those at or above
    `--threshold` (0.6), at most `--limit` (15).
 4. Pairwise pass over the picks, two questions per pair: "same underlying content?" drops the
    lower-scored duplicate (threshold 0.4, measured against control pairs at or below 0.19), and

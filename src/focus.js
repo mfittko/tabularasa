@@ -80,7 +80,8 @@ async function relevance(ask, state, tabs, batch = 40) {
   for (let i = 0; i < tabs.length; i += batch) {
     const chunk = tabs.slice(i, i + batch);
     const questions = Object.fromEntries(chunk.map((t, j) => [`t${j}`, { type: 'noul',
-      instructions: `Is this browser tab relevant to the work or topic described in the state? Tab title: "${t.title}" URL: ${t.url}` }]));
+      instructions: `Is this browser tab relevant to the work or topic described in the state? Tab title: "${t.title}" URL: ${t.url}`
+        + (t.summary ? ` Page summary: ${t.summary.slice(0, 300)}` : '') }]));
     const answers = await ask(state, questions);
     scores.push(...chunk.map((_, j) => answers[`t${j}`].noul));
   }
@@ -177,11 +178,13 @@ export function asker(ask) {
 
 /** Why a tab is or isn't picked: candidate status, linked/Jev score, and the context lines that share words with it. */
 export async function explain(term, { threshold = 0.6, days = 7, db = openDb(), ask, log = console.log, ...ctx } = {}) {
-  const link = db.prepare('SELECT url, title, last_seen, times_seen FROM links WHERE url = ? OR title LIKE ? OR url LIKE ? ORDER BY last_seen DESC LIMIT 1')
+  const link = db.prepare(`SELECT l.url, l.title, l.last_seen, l.times_seen, nullif(trim(coalesce(p.description, '') || ' ' || coalesce(p.excerpt, '')), '') AS summary
+    FROM links l LEFT JOIN pages p ON p.link_id = l.id WHERE l.url = ? OR l.title LIKE ? OR l.url LIKE ? ORDER BY l.last_seen DESC LIMIT 1`)
     .get(term, `%${term}%`, `%${term}%`);
   if (!link) { log(`not in the archive: ${term}`); return null; }
   const texts = gatherContext({ days, log, ...ctx });
   log(`\n${link.title || link.url}\n${link.url}\nlast seen ${link.last_seen.slice(0, 16)}, in ${link.times_seen} runs`);
+  if (link.summary) log(`page: ${link.summary.slice(0, 200)}`);
   const since = new Date(Date.now() - days * 864e5).toISOString();
   const candidate = link.last_seen >= since;
   log(candidate ? `candidate: yes (seen within ${days} days)` : `candidate: no (not seen within ${days} days; raise --days)`);
@@ -210,8 +213,10 @@ export async function focus({ topic, context, days = 7, limit = 15, threshold = 
     try { log(`reviews: ${ingestReviews(db)} PRs ingested`); } catch (e) { console.error(`reviews: skipped (${String(e.message).slice(0, 120)})`); }
   }
   const since = new Date(Date.now() - days * 864e5).toISOString();
-  const tabs = db.prepare('SELECT url, title FROM links WHERE last_seen >= ? ORDER BY last_seen DESC LIMIT 400').all(since);
-  log(`candidates: ${tabs.length}`);
+  const tabs = db.prepare(`SELECT l.url, l.title, nullif(trim(coalesce(p.description, '') || ' ' || coalesce(p.excerpt, '')), '') AS summary
+    FROM links l LEFT JOIN pages p ON p.link_id = l.id WHERE l.last_seen >= ? ORDER BY l.last_seen DESC LIMIT 400`).all(since);
+  const withPages = tabs.filter((t) => t.summary).length;
+  log(`candidates: ${tabs.length}${withPages ? ` (${withPages} with page content)` : ''}`);
 
   const picks = await pick(tabs, texts, ask, { threshold, limit });
   const wins = windows(picks, group);

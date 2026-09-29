@@ -12,6 +12,7 @@ import { cleanupCandidates, deleteLinks, fmt } from '../src/cleanup.js';
 import { selectInteractive } from '../src/picker.js';
 import { fmtRun, fmtTab, listRuns, restore, runTabs } from '../src/restore.js';
 import { askJev, explain, focus, jevKey } from '../src/focus.js';
+import { ingest } from '../src/ingest.js';
 import { install, uninstall } from '../src/install.js';
 
 const USAGE = `tabularasa — archive, close and refocus Safari tabs
@@ -30,10 +31,12 @@ const USAGE = `tabularasa — archive, close and refocus Safari tabs
   tabularasa runs [N]          list the last N archive runs (default 20)
   tabularasa restore [ID] [--pick]   reopen every tab of a run, one window per original window;
                                no ID: choose the run interactively; --pick: choose tabs too
+  tabularasa ingest [--days 30] [--limit 50] [--force]   opt-in: fetch page text via r.jina.ai for recent
+                               links without one; summaries then feed the Jev relevance question
   tabularasa cleanup [--older 30] [--threshold 0.6] [--yes]
                                find outdated tabs (closed GitHub items, Jev-judged stale links unseen
                                for --older days) and pick which to delete; --yes deletes all without asking
-  tabularasa install [--close] [--reopen] [--group] [--hour 6]   LaunchAgent (daily) + Claude Code skill
+  tabularasa install [--close] [--reopen] [--group] [--ingest] [--hour 6]   LaunchAgent (daily) + Claude Code skill
   tabularasa uninstall
   tabularasa "free text"       anything else, e.g. "drop closed github issues and PRs", via Claude + the tab-focus skill
 
@@ -71,10 +74,11 @@ if (cmd?.startsWith('--')) { rest.unshift(cmd); cmd = undefined; } // `tabularas
 switch (cmd) {
   case undefined: focusFlags(rest); doArchive(true).closed && await doFocus(rest, { open: true }); break;
   case 'morning': { // what the LaunchAgent runs
-    const close = rest.includes('--close'), reopen = rest.includes('--reopen'), group = rest.includes('--group');
-    const unknown = rest.filter((f) => !['--close', '--reopen', '--group'].includes(f));
+    const close = rest.includes('--close'), reopen = rest.includes('--reopen'), group = rest.includes('--group'), doIngest = rest.includes('--ingest');
+    const unknown = rest.filter((f) => !['--close', '--reopen', '--group', '--ingest'].includes(f));
     if (unknown.length) { console.error(`morning: unknown flag ${unknown[0]}`); process.exit(2); }
     const r = doArchive(close);
+    if (doIngest) await ingest(openDb(), { limit: 30, log }).catch((e) => log(`warn: ingest failed: ${e.message}`));
     if (reopen && r.closed) await doFocus([], { open: true, group }).catch((e) => log(`warn: focus failed: ${e.message}`));
     break;
   }
@@ -131,6 +135,11 @@ switch (cmd) {
     console.log(`restored ${r.tabs} tabs in ${r.windows} window${r.windows > 1 ? 's' : ''} from run #${id}`);
     break;
   }
+  case 'ingest': {
+    const { values } = parseArgs({ args: rest, options: { days: { type: 'string' }, limit: { type: 'string' }, force: { type: 'boolean' } } });
+    await ingest(openDb(), { days: Number(values.days ?? 30), limit: Number(values.limit ?? 50), force: values.force });
+    break;
+  }
   case 'cleanup': {
     const { values } = parseArgs({ args: rest, options: { older: { type: 'string' }, threshold: { type: 'string' }, yes: { type: 'boolean' } } });
     const key = jevKey();
@@ -148,8 +157,8 @@ switch (cmd) {
     break;
   }
   case 'install': {
-    const { values } = parseArgs({ args: rest, options: { close: { type: 'boolean' }, reopen: { type: 'boolean' }, group: { type: 'boolean' }, hour: { type: 'string' } } });
-    install({ close: values.close, reopen: values.reopen, group: values.group, hour: Number(values.hour ?? 6), bin: BIN });
+    const { values } = parseArgs({ args: rest, options: { close: { type: 'boolean' }, reopen: { type: 'boolean' }, group: { type: 'boolean' }, ingest: { type: 'boolean' }, hour: { type: 'string' } } });
+    install({ close: values.close, reopen: values.reopen, group: values.group, ingest: values.ingest, hour: Number(values.hour ?? 6), bin: BIN });
     break;
   }
   case 'uninstall': uninstall(); break;

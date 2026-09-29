@@ -140,7 +140,7 @@ test('explain: candidate status, linked vs Jev verdict, evidence lines', async (
 
   const a = await explain('Knowledge', { db, ask, log, topic: 'knowledge graph sync https://github.com/o/r/pull/1', calendar: false, github: false });
   assert.deepEqual([a.candidate, a.linked, a.score], [true, false, 0.8]);
-  assert.ok(lines.some((l) => /jev: 0.80 >= threshold 0.6/.test(l)) && lines.some((l) => /^would be picked/.test(l)));
+  assert.ok(lines.some((l) => /jev: 0.80 >= threshold 0.6\nwould be picked/.test(l)), lines.join('|'));
   assert.ok(lines.some((l) => /\[knowledge, graph\] topic: knowledge graph sync/.test(l)), lines.join('|'));
 
   lines.length = 0;
