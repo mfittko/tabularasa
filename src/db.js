@@ -36,7 +36,23 @@ CREATE TABLE IF NOT EXISTS tabs (
 );
 CREATE INDEX IF NOT EXISTS tabs_run ON tabs(run_id);
 CREATE INDEX IF NOT EXISTS tabs_link ON tabs(link_id);
+CREATE TABLE IF NOT EXISTS cache (
+  key        TEXT PRIMARY KEY,
+  value      TEXT NOT NULL,
+  expires_at TEXT NOT NULL
+);
 `;
+
+/** Memoize `fn()` (sync or async, JSON-serialisable result) under `key` for `ttl` seconds. */
+export async function cached(db, key, ttl, fn) {
+  const hit = db.prepare('SELECT value FROM cache WHERE key = ? AND expires_at > ?').get(key, now());
+  if (hit) return JSON.parse(hit.value);
+  const value = await fn();
+  const expires = new Date(Date.now() + ttl * 1000).toISOString();
+  db.prepare('INSERT INTO cache (key, value, expires_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, expires_at = excluded.expires_at')
+    .run(key, JSON.stringify(value ?? null), expires);
+  return value;
+}
 
 export function openDb(file = DB_FILE) {
   if (file !== ':memory:') fs.mkdirSync(path.dirname(file), { recursive: true });
