@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { openDb, now } from './db.js';
+import { isMuted, mutes, pins, withPins } from './prefs.js';
 
 const JEV_URL = 'https://api.typesafe.ai/v1/systemone';
 const URL_RE = /https?:\/\/[^\s<>|"')\]]+/g;
@@ -145,8 +146,10 @@ export async function pick(tabs, texts, ask, { threshold = 0.6, limit = 15 } = {
 export function windows(picks, group) {
   if (!group) return picks.length ? [picks] : [];
   const groups = [...Map.groupBy(picks, (p) => p.group).values()];
-  const singles = groups.filter((g) => g.length === 1).flat();
-  return [...groups.filter((g) => g.length > 1), ...(singles.length ? [singles] : [])];
+  const pinnedWin = groups.filter((g) => g[0].group === -1); // pinned tabs share a window of their own
+  const rest = groups.filter((g) => g[0].group !== -1);
+  const singles = rest.filter((g) => g.length === 1).flat();
+  return [...pinnedWin, ...rest.filter((g) => g.length > 1), ...(singles.length ? [singles] : [])];
 }
 
 export function openInNewWindow(urls) {
@@ -213,12 +216,16 @@ export async function focus({ topic, context, days = 7, limit = 15, threshold = 
     try { log(`reviews: ${ingestReviews(db)} PRs ingested`); } catch (e) { console.error(`reviews: skipped (${String(e.message).slice(0, 120)})`); }
   }
   const since = new Date(Date.now() - days * 864e5).toISOString();
+  const muted = mutes(db);
   const tabs = db.prepare(`SELECT l.url, l.title, nullif(trim(coalesce(p.description, '') || ' ' || coalesce(p.excerpt, '')), '') AS summary
-    FROM links l LEFT JOIN pages p ON p.link_id = l.id WHERE l.last_seen >= ? ORDER BY l.last_seen DESC LIMIT 400`).all(since);
+    FROM links l LEFT JOIN pages p ON p.link_id = l.id WHERE l.last_seen >= ? ORDER BY l.last_seen DESC LIMIT 400`).all(since)
+    .filter((t) => !isMuted(t, muted));
   const withPages = tabs.filter((t) => t.summary).length;
-  log(`candidates: ${tabs.length}${withPages ? ` (${withPages} with page content)` : ''}`);
+  log(`candidates: ${tabs.length}${withPages ? ` (${withPages} with page content)` : ''}${muted.length ? ` (${muted.length} mute terms)` : ''}`);
 
-  const picks = await pick(tabs, texts, ask, { threshold, limit });
+  const pinned = pins(db);
+  const titles = new Map(db.prepare('SELECT url, title FROM links WHERE url IN (SELECT url FROM pins)').all().map((r) => [r.url, r.title]));
+  const picks = withPins(await pick(tabs, texts, ask, { threshold, limit }), pinned, titles);
   const wins = windows(picks, group);
   wins.forEach((w, i) => {
     if (group) log(`${i ? '\n' : ''}window ${i + 1}`);

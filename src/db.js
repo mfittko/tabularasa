@@ -44,6 +44,8 @@ CREATE TABLE IF NOT EXISTS pages (
   excerpt     TEXT,
   error       TEXT
 );
+CREATE TABLE IF NOT EXISTS pins  (url  TEXT PRIMARY KEY, added_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS mutes (term TEXT PRIMARY KEY, added_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS cache (
   key        TEXT PRIMARY KEY,
   value      TEXT NOT NULL,

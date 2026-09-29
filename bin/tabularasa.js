@@ -10,6 +10,7 @@ import { archive, safariRunning } from '../src/archive.js';
 import { DB_FILE, openDb } from '../src/db.js';
 import { cleanupCandidates, deleteLinks, fmt } from '../src/cleanup.js';
 import { selectInteractive } from '../src/picker.js';
+import { mute, mutes, pin, pins, unmute, unpin } from '../src/prefs.js';
 import { fmtRun, fmtTab, listRuns, restore, runTabs } from '../src/restore.js';
 import { askJev, explain, focus, jevKey } from '../src/focus.js';
 import { ingest } from '../src/ingest.js';
@@ -27,6 +28,9 @@ const USAGE = `tabularasa — archive, close and refocus Safari tabs
                                in a new window; X is the only context. --new keeps current windows open
   tabularasa search TERM       find archived tabs by title or url
   tabularasa forget TERM       delete archived tabs whose title or url contains TERM
+  tabularasa pin URL|TERM      always reopen this tab (own window when grouping); unpin URL|TERM
+  tabularasa mute TERM         never reopen tabs matching TERM, cleanup leaves them alone; unmute TERM
+  tabularasa pins              list pins and mutes
   tabularasa why URL|TERM [focus flags]   explain why a tab would or wouldn't be reopened right now
   tabularasa runs [N]          list the last N archive runs (default 20)
   tabularasa restore [ID] [--pick]   reopen every tab of a run, one window per original window;
@@ -140,6 +144,11 @@ switch (cmd) {
     await ingest(openDb(), { days: Number(values.days ?? 30), limit: Number(values.limit ?? 50), force: values.force });
     break;
   }
+  case 'pin': { const u = pin(openDb(), rest.join(' ')); console.log(u ? `pinned ${u}` : 'no archived tab matches'); break; }
+  case 'unpin': console.log(`unpinned ${unpin(openDb(), rest.join(' '))}`); break;
+  case 'mute': mute(openDb(), rest.join(' ')); console.log(`muted "${rest.join(' ')}"`); break;
+  case 'unmute': console.log(`unmuted ${unmute(openDb(), rest.join(' '))}`); break;
+  case 'pins': { const db = openDb(); pins(db).forEach((u) => console.log(`pin   ${u}`)); mutes(db).forEach((t) => console.log(`mute  ${t}`)); break; }
   case 'cleanup': {
     const { values } = parseArgs({ args: rest, options: { older: { type: 'string' }, threshold: { type: 'string' }, yes: { type: 'boolean' } } });
     const key = jevKey();

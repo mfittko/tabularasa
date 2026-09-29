@@ -40,6 +40,8 @@ tabularasa restore                # pick a run, reopen all its tabs, one window 
 tabularasa restore 25 --pick      # a specific run, choose which tabs come back
 tabularasa search playwright      # find archived tabs by title or url
 tabularasa forget dependabot      # delete archived tabs matching a term
+tabularasa pin "Team dashboard"   # always reopen (own window when grouping); unpin to stop
+tabularasa mute youtube           # never reopen, cleanup leaves it alone; unmute to stop; `pins` lists both
 tabularasa "drop closed github issues and PRs"   # anything else: Claude Code runs the tab-focus skill
 ```
 

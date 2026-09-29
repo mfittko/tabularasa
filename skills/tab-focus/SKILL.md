@@ -29,5 +29,10 @@ Steps:
    `tabularasa forget TERM` for a simple term, or
    `sqlite3 ~/.tab-archive/tabs.db "DELETE FROM tabs WHERE link_id IN (...); DELETE FROM links WHERE id IN (...);"`.
    Report how many rows were deleted and list their titles.
-5. Print the script output verbatim: one line per tab with probability, reason and title.
+5. Other requests map to subcommands: "what did I close this morning" / "bring back my tabs from
+   yesterday" -> `tabularasa runs` then `tabularasa restore ID`; "why wasn't X reopened" ->
+   `tabularasa why "X"`; "always open X" -> `tabularasa pin "X"`; "stop reopening X" -> `tabularasa mute "X"`;
+   "clean up old tabs" -> `tabularasa cleanup --yes` only if the user said to delete without asking,
+   otherwise list with `tabularasa cleanup < /dev/null` and ask.
+6. Print the script output verbatim: one line per tab with probability, reason and title.
    If it printed `no matching tabs`, say so and suggest `--threshold 0.4` or a broader topic.

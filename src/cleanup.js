@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { cached } from './db.js';
+import { isMuted, mutes, pins } from './prefs.js';
 export { selectInteractive } from './picker.js';
 
 const execFileP = promisify(execFile);
@@ -57,7 +58,9 @@ async function jevStale(db, links, ask, threshold, batch = 40) {
 
 /** Candidates for deletion: closed GitHub items, then Jev-judged stale links older than `olderDays`. */
 export async function cleanupCandidates(db, { olderDays = 30, threshold = 0.6, ask, run = runJson, limit = 200 } = {}) {
-  const all = db.prepare('SELECT id, url, title, last_seen, times_seen FROM links ORDER BY last_seen').all();
+  const muted = mutes(db), pinned = new Set(pins(db));
+  const all = db.prepare('SELECT id, url, title, last_seen, times_seen FROM links ORDER BY last_seen').all()
+    .filter((l) => !pinned.has(l.url) && !isMuted(l, muted)); // pinned stays, muted is yours to forget explicitly
   const closed = await githubClosed(db, all, run);
   const taken = new Set(closed.map((l) => l.id));
   const since = new Date(Date.now() - olderDays * 864e5).toISOString();
