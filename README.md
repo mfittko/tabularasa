@@ -80,9 +80,14 @@ Safari keeps a list of recently closed tabs in `~/Library/Safari/RecentlyClosedT
 dismissed: they stop being reopen candidates and show up in `cleanup` as "closed by you". Nothing is
 deleted; `tabularasa undismiss TERM` reverts, and a tab seen open again clears it automatically.
 
-Reading that file needs Full Disk Access: System Settings → Privacy & Security → Full Disk Access,
-add the Node binary the LaunchAgent runs (`node -p process.execPath`) and your terminal app. Until
-then the scan is skipped with a one-line notice.
+Reading that file needs Full Disk Access, and macOS cannot grant it per file. To keep the grant as
+narrow as possible, `tabularasa closed-sync` compiles a 30-line helper (`helper/closed-sync.c`) into
+`~/.tab-archive/bin/closed-sync` and installs a LaunchAgent that runs it whenever Safari's file
+changes. The helper copies that one file into `~/.tab-archive`; Node and your terminal never touch
+`~/Library/Safari`. Grant Full Disk Access to the helper only: System Settings → Privacy & Security →
+Full Disk Access → "+", Cmd+Shift+G, paste `~/.tab-archive/bin/closed-sync`. Until then the scan is
+skipped with a one-line notice. The helper is compiled once; a rebuilt binary would need the grant
+again, so `closed-sync` never recompiles an existing one.
 
 ## Archive
 

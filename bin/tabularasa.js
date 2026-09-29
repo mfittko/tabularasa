@@ -15,7 +15,7 @@ import { mute, mutes, pin, pins, unmute, unpin } from '../src/prefs.js';
 import { fmtRun, fmtTab, lastClosedRun, listRuns, restore, runTabs } from '../src/restore.js';
 import { askJev, explain, focus, jevKey } from '../src/focus.js';
 import { ingest } from '../src/ingest.js';
-import { install, uninstall } from '../src/install.js';
+import { install, installClosedSync, uninstall } from '../src/install.js';
 
 const USAGE = `tabularasa — archive, close and refocus Safari tabs
 
@@ -35,6 +35,8 @@ const USAGE = `tabularasa — archive, close and refocus Safari tabs
   tabularasa dismissed         tabs you closed by hand since they were last archived (read from Safari's
                                recently-closed list; needs Full Disk Access); they don't reopen and show in cleanup
   tabularasa undismiss URL|TERM   allow a dismissed tab to reopen again
+  tabularasa closed-sync       one-time setup: tiny helper + LaunchAgent that copies Safari's recently-closed
+                               list into ~/.tab-archive; only that helper needs Full Disk Access
   tabularasa why URL|TERM [focus flags]   explain why a tab would or wouldn't be reopened right now
   tabularasa runs [N]          list the last N archive runs (default 20)
   tabularasa restore [ID] [--choose] [--pick] [--new]
@@ -157,6 +159,7 @@ switch (cmd) {
     break;
   }
   case 'dismissed': { const db = openDb(); console.log(scanClosed(db)); dismissed(db).forEach((l) => console.log(`${l.dismissed_at.slice(0, 16)}  ${l.title || l.url}`)); break; }
+  case 'closed-sync': installClosedSync(); break;
   case 'undismiss': console.log(`undismissed ${undismiss(openDb(), rest.join(' '))}`); break;
   case 'pin': { const u = pin(openDb(), rest.join(' ')); console.log(u ? `pinned ${u}` : 'no archived tab matches'); break; }
   case 'unpin': console.log(`unpinned ${unpin(openDb(), rest.join(' '))}`); break;

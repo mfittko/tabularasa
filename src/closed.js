@@ -1,8 +1,22 @@
 import { execFileSync } from 'node:child_process';
 import os from 'node:os';
+import fs from 'node:fs';
 import path from 'node:path';
+import { DIR } from './db.js';
+import { CLOSED_LABEL, closedSyncInstalled } from './install.js';
 
 export const RECENTLY_CLOSED = path.join(os.homedir(), 'Library/Safari/RecentlyClosedTabs.plist');
+/** Copy maintained by the closed-sync helper (see install.js): the way in without giving Node Full Disk Access. */
+export const SYNCED_COPY = path.join(DIR, 'RecentlyClosedTabs.plist');
+
+/** Ask launchd to refresh the copy now and wait briefly for it. Returns the file to read, or null without the helper. */
+export function freshCopy() {
+  const mtime = () => fs.statSync(SYNCED_COPY, { throwIfNoEntry: false })?.mtimeMs ?? 0;
+  const before = mtime();
+  try { execFileSync('launchctl', ['kickstart', `gui/${os.userInfo().uid}/${CLOSED_LABEL}`], { stdio: 'ignore' }); } catch { return before ? SYNCED_COPY : null; }
+  for (let i = 0; i < 20 && mtime() <= before; i++) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+  return mtime() ? SYNCED_COPY : null; // helper ran but never wrote: no Full Disk Access yet
+}
 
 /** Minimal XML plist reader (dict, array, string, date, integer, real, true, false, data). */
 export function parsePlistXml(xml) {
@@ -76,10 +90,12 @@ export function dismissClosed(db, closed) {
 /** Scan Safari's list and apply it; returns a one-line summary. Never throws (permission problems are common). */
 export function scanClosed(db) {
   try {
-    return `dismissed: ${dismissClosed(db, readRecentlyClosed())} newly closed by you`;
+    const file = freshCopy() ?? (closedSyncInstalled() ? null : RECENTLY_CLOSED); // no helper: try the real file (needs Full Disk Access)
+    if (!file) return 'dismissed: skipped (closed-sync helper has no Full Disk Access yet; see README)';
+    return `dismissed: ${dismissClosed(db, readRecentlyClosed(file))} newly closed by you`;
   } catch (e) {
     const perm = /permission|not permitted|EPERM/i.test(e.message);
-    return `dismissed: skipped (${perm ? `no Full Disk Access for ${process.execPath}; see README` : e.message.split('\n')[0].slice(0, 120)})`;
+    return `dismissed: skipped (${perm ? 'run `tabularasa closed-sync` once and grant its helper Full Disk Access; see README' : e.message.split('\n')[0].slice(0, 120)})`;
   }
 }
 
