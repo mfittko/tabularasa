@@ -1,42 +1,52 @@
-import { execFileSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import readline from 'node:readline';
+import { promisify } from 'node:util';
 
-const runJson = (cmd, args) => JSON.parse(execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 60000 }));
+const execFileP = promisify(execFile);
+const runJson = async (cmd, args) => JSON.parse((await execFileP(cmd, args, { encoding: 'utf8', timeout: 60000 })).stdout);
 const GH_RE = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/(pull|issues)\/(\d+)/;
 
-/** Merged or closed GitHub PRs and issues, whatever their age. */
-function githubClosed(links, run) {
-  const out = [];
-  for (const l of links) {
-    const m = l.url.match(GH_RE);
-    if (!m) continue;
-    const [, owner, repo, kind, n] = m;
-    try {
-      const r = run('gh', ['api', `repos/${owner}/${repo}/${kind === 'pull' ? 'pulls' : 'issues'}/${n}`, '--jq', '{state: .state, merged: .merged_at}']);
-      if (r.state === 'closed') out.push({ ...l, reason: r.merged ? 'merged PR' : kind === 'pull' ? 'closed PR' : 'closed issue' });
-    } catch { /* deleted repo, no access: leave it alone */ }
-  }
+/** Run `fn` over `items` with at most `n` in flight; results in input order. */
+async function pool(items, n, fn) {
+  const out = new Array(items.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => {
+    for (let i; (i = next++) < items.length;) out[i] = await fn(items[i], i);
+  }));
   return out;
+}
+
+/** Merged or closed GitHub PRs and issues, whatever their age. */
+async function githubClosed(links, run) {
+  const gh = links.map((l) => [l, l.url.match(GH_RE)]).filter(([, m]) => m);
+  const results = await pool(gh, 8, async ([l, [, owner, repo, kind, n]]) => {
+    try {
+      const r = await run('gh', ['api', `repos/${owner}/${repo}/${kind === 'pull' ? 'pulls' : 'issues'}/${n}`, '--jq', '{state: .state, merged: .merged_at}']);
+      if (r.state === 'closed') return { ...l, reason: r.merged ? 'merged PR' : kind === 'pull' ? 'closed PR' : 'closed issue' };
+    } catch { /* deleted repo, no access: leave it alone */ }
+    return null;
+  });
+  return results.filter(Boolean);
 }
 
 /** Links unseen for a while that Jev judges outdated, given title, url and how often they came back. */
 async function jevStale(links, ask, threshold, batch = 40) {
-  const out = [];
   const today = new Date().toISOString().slice(0, 10);
-  for (let i = 0; i < links.length; i += batch) {
-    const chunk = links.slice(i, i + batch);
+  const chunks = [];
+  for (let i = 0; i < links.length; i += batch) chunks.push(links.slice(i, i + batch));
+  const results = await Promise.all(chunks.map(async (chunk) => {
     const questions = Object.fromEntries(chunk.map((l, j) => [`t${j}`, { type: 'noul', instructions:
       `Is this archived browser tab likely outdated, finished or no longer useful to keep, rather than a lasting reference? Title: "${l.title}" URL: ${l.url} last opened ${l.last_seen.slice(0, 10)}, opened in ${l.times_seen} archive runs.` }]));
     const answers = await ask(`Today is ${today}. Judge whether archived browser tabs are outdated.`, questions);
-    chunk.forEach((l, j) => { const p = answers[`t${j}`].noul; if (p >= threshold) out.push({ ...l, reason: `stale ${p.toFixed(2)}` }); });
-  }
-  return out;
+    return chunk.map((l, j) => ({ l, p: answers[`t${j}`].noul }));
+  }));
+  return results.flat().filter(({ p }) => p >= threshold).map(({ l, p }) => ({ ...l, reason: `stale ${p.toFixed(2)}` }));
 }
 
 /** Candidates for deletion: closed GitHub items, then Jev-judged stale links older than `olderDays`. */
 export async function cleanupCandidates(db, { olderDays = 30, threshold = 0.6, ask, run = runJson, limit = 200 } = {}) {
   const all = db.prepare('SELECT id, url, title, last_seen, times_seen FROM links ORDER BY last_seen').all();
-  const closed = githubClosed(all, run);
+  const closed = await githubClosed(all, run);
   const taken = new Set(closed.map((l) => l.id));
   const since = new Date(Date.now() - olderDays * 864e5).toISOString();
   const aged = all.filter((l) => l.last_seen < since && !taken.has(l.id)).slice(0, limit);
