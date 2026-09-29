@@ -1,6 +1,6 @@
 {
   "name": "@mfittko/tabularasa",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Archive, close and refocus Safari tabs. Every tab lands in a local SQLite inventory; the relevant ones come back, judged by Jev against your calendar and GitHub.",
   "type": "module",
   "bin": {
