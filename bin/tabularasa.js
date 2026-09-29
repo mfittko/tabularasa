@@ -12,7 +12,7 @@ import { cleanupCandidates, deleteLinks, fmt } from '../src/cleanup.js';
 import { dismissed, scanClosed, undismiss } from '../src/closed.js';
 import { selectInteractive } from '../src/picker.js';
 import { mute, mutes, pin, pins, unmute, unpin } from '../src/prefs.js';
-import { fmtRun, fmtTab, listRuns, restore, runTabs } from '../src/restore.js';
+import { fmtRun, fmtTab, lastClosedRun, listRuns, restore, runTabs } from '../src/restore.js';
 import { askJev, explain, focus, jevKey } from '../src/focus.js';
 import { ingest } from '../src/ingest.js';
 import { install, uninstall } from '../src/install.js';
@@ -37,8 +37,10 @@ const USAGE = `tabularasa — archive, close and refocus Safari tabs
   tabularasa undismiss URL|TERM   allow a dismissed tab to reopen again
   tabularasa why URL|TERM [focus flags]   explain why a tab would or wouldn't be reopened right now
   tabularasa runs [N]          list the last N archive runs (default 20)
-  tabularasa restore [ID] [--pick]   reopen every tab of a run, one window per original window;
-                               no ID: choose the run interactively; --pick: choose tabs too
+  tabularasa restore [ID] [--choose] [--pick] [--new]
+                               undo: archive + close what is open now, then bring back the windows of the
+                               last closing run (or run ID); --choose: pick the run, --pick: pick tabs too,
+                               --new: keep the current windows
   tabularasa ingest [--days 30] [--limit 50] [--force]   opt-in: fetch page text via r.jina.ai for recent
                                links without one; summaries then feed the Jev relevance question
   tabularasa cleanup [--older 30] [--threshold 0.6] [--yes]
@@ -99,7 +101,7 @@ switch (cmd) {
     const words = rest.filter((w) => w !== '--new');
     const bad = words.find((w) => w.startsWith('--'));
     if (bad) { console.error(`topic: unknown flag ${bad}`); process.exit(2); }
-    if (!keep && !doArchive(true).closed && safariRunning()) break; // Safari has tabs but nothing was archived: don't pile on
+    if (!keep && safariRunning()) { const a = doArchive(true); if (a.found && !a.closed) break; } // Safari has tabs but nothing was archived: don't pile on
     await doFocus(['--topic', words.join(' '), '--days', '90', '--open', '--no-calendar', '--no-github', '--no-reviews'], { context: undefined });
     break;
   }
@@ -126,20 +128,25 @@ switch (cmd) {
   }
   case 'runs': listRuns(openDb(), Number(rest[0] ?? 20)).forEach((r) => console.log(fmtRun(r))); break;
   case 'restore': {
-    const pickTabs = rest.includes('--pick');
+    const pickTabs = rest.includes('--pick'), keep = rest.includes('--new');
     let id = rest.find((a) => /^\d+$/.test(a));
     const db = openDb();
-    if (!id) {
+    if (!id && rest.includes('--choose')) {
       if (!process.stdin.isTTY) { console.error('restore: pass a run id (see `tabularasa runs`)'); process.exit(2); }
-      const runs = listRuns(db, 20);
-      const [chosen] = await selectInteractive(runs, { single: true, format: fmtRun, title: 'Which run?' });
+      const [chosen] = await selectInteractive(listRuns(db, 20), { single: true, format: fmtRun, title: 'Which run?' });
       if (!chosen) break;
       id = chosen.id;
+    }
+    if (!id) { // undo: whatever the last closing run took away
+      const last = lastClosedRun(db);
+      if (!last) { console.log('nothing to undo: no run has closed windows yet'); break; }
+      id = last.id;
     }
     let tabs = runTabs(db, Number(id));
     if (!tabs.length) { console.log(`run #${id} has no tabs`); break; }
     if (pickTabs && process.stdin.isTTY) tabs = await selectInteractive(tabs, { preselect: true, format: fmtTab, title: `run #${id}: ${tabs.length} tabs` });
     if (!tabs.length) break;
+    if (!keep && safariRunning()) { const a = doArchive(true); if (a.found && !a.closed) break; } // current windows (e.g. this morning's picks) go into the archive, then away; never pile on
     const r = restore(tabs);
     console.log(`restored ${r.tabs} tabs in ${r.windows} window${r.windows > 1 ? 's' : ''} from run #${id}`);
     break;

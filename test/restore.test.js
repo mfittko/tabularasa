@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import { archive } from '../src/archive.js';
 import { openDb } from '../src/db.js';
 import { selectInteractive } from '../src/picker.js';
-import { fmtRun, listRuns, restore, runTabs } from '../src/restore.js';
+import { fmtRun, lastClosedRun, listRuns, restore, runTabs } from '../src/restore.js';
 
 const tab = (w, i, url, title, cur = 0) => ({ window_id: w, window_index: w, tab_index: i, is_current: cur, url, title, source: 'safari' });
 
@@ -46,4 +46,11 @@ test('picker: single mode chooses the row under the cursor, preselect starts wit
   t = fakeTty(); p = selectInteractive(items, { ...t, single: true });
   t.key('escape');
   assert.deepEqual(await p, []);
+});
+
+test('lastClosedRun: the newest run that closed windows, or undefined', () => {
+  const db = openDb(':memory:');
+  assert.equal(lastClosedRun(db), undefined);
+  db.exec("INSERT INTO runs (ran_at, tabs_found, new_links, closed) VALUES ('2026-09-29T06:00:00Z', 20, 0, 1), ('2026-09-29T07:00:00Z', 15, 0, 0)");
+  assert.equal(lastClosedRun(db).id, 1);
 });

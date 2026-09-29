@@ -7,6 +7,9 @@ export function listRuns(db, limit = 20) {
     FROM runs r ORDER BY r.id DESC LIMIT ?`).all(limit);
 }
 
+/** The run whose closed windows an undo should bring back: the newest closing run. */
+export const lastClosedRun = (db) => db.prepare('SELECT id, ran_at, tabs_found FROM runs WHERE closed = 1 ORDER BY id DESC LIMIT 1').get();
+
 /** Tabs of one run in their recorded window and tab order. */
 export function runTabs(db, runId) {
   return db.prepare(`SELECT t.window_id, t.window_index, t.tab_index, t.is_current, l.url, coalesce(nullif(t.title, ''), l.title) AS title

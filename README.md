@@ -36,7 +36,7 @@ tabularasa topic "knowledge graph"        # archive + close everything, open tab
 tabularasa topic "knowledge graph" --new  # same, but keep the current windows open
 tabularasa why "Knowledge Graph"  # explain: candidate? linked? Jev score vs threshold, context lines that share words
 tabularasa runs                   # recent archive runs: id, time, tabs, windows, closed?
-tabularasa restore                # pick a run, reopen all its tabs, one window per original window
+tabularasa restore                # undo: archive + close what is open, bring back the last closed windows; ID, --choose, --pick, --new
 tabularasa restore 25 --pick      # a specific run, choose which tabs come back
 tabularasa search playwright      # find archived tabs by title or url
 tabularasa forget dependabot      # delete archived tabs matching a term
