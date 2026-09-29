@@ -1,0 +1,13 @@
+{
+  "name": "tabularasa",
+  "version": "0.1.0",
+  "description": "Archive, close and refocus Safari tabs. Every tab lands in a local SQLite inventory; the relevant ones come back, judged by Jev against your calendar and GitHub.",
+  "type": "module",
+  "bin": { "tabularasa": "bin/tabularasa.js" },
+  "files": ["bin", "src", "skills", "README.md"],
+  "scripts": { "test": "node --test" },
+  "engines": { "node": ">=22.13" },
+  "os": ["darwin"],
+  "license": "MIT",
+  "repository": "github:mfittko/tabularasa"
+}
