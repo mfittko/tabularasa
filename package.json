@@ -32,7 +32,10 @@
     "darwin"
   ],
   "license": "MIT",
-  "repository": "github:mfittko/tabularasa",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mfittko/tabularasa.git"
+  },
   "publishConfig": {
     "access": "public"
   }
