@@ -8,7 +8,8 @@ import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { archive } from '../src/archive.js';
 import { DB_FILE, openDb } from '../src/db.js';
-import { focus } from '../src/focus.js';
+import { cleanupCandidates, deleteLinks, fmt, selectInteractive } from '../src/cleanup.js';
+import { askJev, focus, jevKey } from '../src/focus.js';
 import { install, uninstall } from '../src/install.js';
 
 const USAGE = `tabularasa — archive, close and refocus Safari tabs
@@ -22,6 +23,9 @@ const USAGE = `tabularasa — archive, close and refocus Safari tabs
   tabularasa topic "X"         open archived tabs about X (last 90 days) in a new window; X is the only context
   tabularasa search TERM       find archived tabs by title or url
   tabularasa forget TERM       delete archived tabs whose title or url contains TERM
+  tabularasa cleanup [--older 30] [--threshold 0.6] [--yes]
+                               find outdated tabs (closed GitHub items, Jev-judged stale links unseen
+                               for --older days) and pick which to delete; --yes deletes all without asking
   tabularasa install [--close] [--reopen] [--hour 6]   LaunchAgent (daily) + Claude Code skill
   tabularasa uninstall
   tabularasa "free text"       anything else, e.g. "drop closed github issues and PRs", via Claude + the tab-focus skill
@@ -76,6 +80,22 @@ switch (cmd) {
     const like = `%${rest.join(' ')}%`, db = openDb();
     db.prepare('DELETE FROM tabs WHERE link_id IN (SELECT id FROM links WHERE title LIKE ? OR url LIKE ?)').run(like, like);
     console.log(`deleted ${db.prepare('DELETE FROM links WHERE title LIKE ? OR url LIKE ?').run(like, like).changes} links`);
+    break;
+  }
+  case 'cleanup': {
+    const { values } = parseArgs({ args: rest, options: { older: { type: 'string' }, threshold: { type: 'string' }, yes: { type: 'boolean' } } });
+    const key = jevKey();
+    const db = openDb();
+    const items = await cleanupCandidates(db, { olderDays: Number(values.older ?? 30), threshold: Number(values.threshold ?? 0.6),
+      ask: key ? (s, q) => askJev(key, s, q) : undefined });
+    if (!items.length) { console.log('nothing looks outdated'); break; }
+    let chosen = items;
+    if (!values.yes) {
+      if (!process.stdin.isTTY) { items.forEach((l) => console.log(fmt(l))); console.log(`\n${items.length} candidates; rerun with --yes to delete them`); break; }
+      chosen = await selectInteractive(items);
+    }
+    chosen.forEach((l) => console.log(`deleted  ${fmt(l)}`));
+    console.log(`deleted ${deleteLinks(db, chosen.map((l) => l.id))} of ${items.length} candidates`);
     break;
   }
   case 'install': {
