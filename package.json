@@ -14,7 +14,8 @@
   ],
   "scripts": {
     "test": "node --test",
-    "prepublishOnly": "npm test"
+    "prepublishOnly": "npm test",
+    "demo": "node scripts/demo.js"
   },
   "keywords": [
     "safari",

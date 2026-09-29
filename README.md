@@ -5,6 +5,8 @@ relevant ones come back in a new window, judged by [Jev](https://typesafe.ai) ag
 calendar, GitHub activity, and whatever context you hand it. Nothing is lost: every tab you ever
 closed stays searchable.
 
+![tabularasa demo: archive and close, reopen relevant tabs, topic search, interactive cleanup](docs/demo.svg)
+
 macOS only. Node 22.13+ (uses `node:sqlite`), no npm dependencies. Optional CLIs: `gws` for
 Google Calendar, `gh` for GitHub, `claude` for free-text requests.
 
