@@ -20,7 +20,8 @@ const USAGE = `tabularasa — archive, close and refocus Safari tabs
   tabularasa focus [flags]     dry run of the picker; --open opens them
                                --topic "X" --days N --limit N --threshold P --context FILE
                                --no-calendar --no-github --no-reviews
-  tabularasa topic "X"         open archived tabs about X (last 90 days) in a new window; X is the only context
+  tabularasa topic "X" [--close]   open archived tabs about X (last 90 days) in a new window; X is the only
+                               context. --close archives and closes everything else first
   tabularasa search TERM       find archived tabs by title or url
   tabularasa forget TERM       delete archived tabs whose title or url contains TERM
   tabularasa cleanup [--older 30] [--threshold 0.6] [--yes]
@@ -68,8 +69,13 @@ switch (cmd) {
   case 'archive': doArchive(false); break;
   case 'close': doArchive(true); break;
   case 'focus': await doFocus(rest); break;
-  case 'topic': // the topic is the whole context: no calendar, GitHub or session context mixed in
-    await doFocus(['--topic', rest.join(' '), '--days', '90', '--open', '--no-calendar', '--no-github', '--no-reviews'], { context: undefined }); break;
+  case 'topic': { // the topic is the whole context: no calendar, GitHub or session context mixed in
+    const close = rest.includes('--close');
+    const words = rest.filter((w) => w !== '--close');
+    if (close && !doArchive(true).closed) break; // nothing archived, nothing closed: don't reopen on top
+    await doFocus(['--topic', words.join(' '), '--days', '90', '--open', '--no-calendar', '--no-github', '--no-reviews'], { context: undefined });
+    break;
+  }
   case 'search': {
     const like = `%${rest.join(' ')}%`;
     for (const r of openDb().prepare('SELECT last_seen, times_seen, title, url FROM links WHERE title LIKE ? OR url LIKE ? ORDER BY last_seen DESC LIMIT 50').all(like, like))

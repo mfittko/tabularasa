@@ -32,6 +32,7 @@ tabularasa close                  # archive + close, reopen nothing
 tabularasa focus                  # dry run: what would be reopened, with probability and reason
 tabularasa focus --open --limit 25 --threshold 0.75
 tabularasa topic "knowledge graph"   # open archived tabs about a topic (last 90 days) in a new window
+tabularasa topic "knowledge graph" --close   # same, but archive + close everything else first
 tabularasa search playwright      # find archived tabs by title or url
 tabularasa forget dependabot      # delete archived tabs matching a term
 tabularasa "drop closed github issues and PRs"   # anything else: Claude Code runs the tab-focus skill
