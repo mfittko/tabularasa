@@ -46,6 +46,8 @@ CREATE TABLE IF NOT EXISTS pages (
 );
 CREATE TABLE IF NOT EXISTS pins  (url  TEXT PRIMARY KEY, added_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS mutes (term TEXT PRIMARY KEY, added_at TEXT NOT NULL);
+-- tabs focus opened since the last archive; one missing at the next archive was closed by hand
+CREATE TABLE IF NOT EXISTS opened (url TEXT PRIMARY KEY, opened_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS cache (
   key        TEXT PRIMARY KEY,
   value      TEXT NOT NULL,

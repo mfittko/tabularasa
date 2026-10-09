@@ -60,6 +60,15 @@ export function archive({ close = false, db = openDb(), tabs = exportTabs(), clo
         title = coalesce(nullif(excluded.title, ''), links.title) RETURNING id`);
     const insTab = db.prepare(`INSERT INTO tabs (run_id, link_id, window_id, window_index, tab_index, is_current, title, source)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
+    // Safari writes RecentlyClosedTabs.plist minutes late, so tabs focus opened and you closed since
+    // are caught here directly. No tabs at all means Safari quit, not that you closed them.
+    // ponytail: a reopened tab that redirected or was navigated away counts as closed; undismiss reverts
+    if (tabs.length) {
+      const open = new Set(tabs.map((t) => t.url));
+      const dismiss = db.prepare('UPDATE links SET dismissed_at = ? WHERE url = ?');
+      for (const { url } of db.prepare('SELECT url FROM opened').all()) if (!open.has(url)) dismiss.run(at, url);
+      db.exec('DELETE FROM opened');
+    }
     const ids = new Map(); // one links upsert per URL per run, so times_seen counts runs, not duplicate tabs
     for (const t of tabs) {
       let id = ids.get(t.url);

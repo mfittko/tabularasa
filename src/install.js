@@ -12,6 +12,9 @@ const SKILL_DST = path.join(os.homedir(), '.claude/skills/tab-focus');
 const domain = () => `gui/${os.userInfo().uid}`;
 const launchctl = (...a) => execFileSync('launchctl', a, { stdio: 'inherit' });
 
+// Homebrew's versioned Cellar path disappears on the next `brew upgrade node`; use the stable symlink
+export const NODE = process.execPath.replace(/\/Cellar\/node\/[^/]+\//, '/');
+
 export function plistXml({ close = false, reopen = false, group = false, ingest = false, bin, hour = 6 }) {
   const args = ['morning', ...(close ? ['--close'] : []), ...(reopen ? ['--reopen'] : []), ...(group ? ['--group'] : []), ...(ingest ? ['--ingest'] : [])];
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -20,7 +23,7 @@ export function plistXml({ close = false, reopen = false, group = false, ingest 
 <dict>
   <key>Label</key><string>${LABEL}</string>
   <key>ProgramArguments</key>
-  <array>${[process.execPath, bin, ...args].map((s) => `<string>${s}</string>`).join('')}</array>
+  <array>${[NODE, bin, ...args].map((s) => `<string>${s}</string>`).join('')}</array>
   <key>EnvironmentVariables</key>
   <dict><key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string></dict>
   <key>StartCalendarInterval</key>

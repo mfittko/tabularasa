@@ -240,6 +240,8 @@ export async function focus({ topic, context, days = 7, limit = 15, threshold = 
   if (!picks.length) log('no matching tabs');
   else if (open) {
     for (const w of wins) openInNewWindow(w.map((p) => p.url));
+    const rec = db.prepare('INSERT OR REPLACE INTO opened (url, opened_at) VALUES (?, ?)');
+    for (const p of picks) rec.run(p.url, now());
     log(`opened ${picks.length} tabs in ${wins.length} window${wins.length > 1 ? 's' : ''}`);
   }
   return picks;

@@ -52,3 +52,17 @@ test('archive: closes only after the write committed', () => {
   assert.throws(() => archive({ db, tabs: [tab('https://a.example/', 'A')], close: true, closer, running: () => true }), /readonly|query_only|attempt to write/i);
   assert.equal(closed, 1, 'failed write, nothing closed');
 });
+
+test('archive: a tab focus opened that is gone at the next archive is dismissed; Safari quit dismisses nothing', () => {
+  const db = openDb(':memory:');
+  archive({ db, tabs: [tab('https://a.example/', 'A'), tab('https://b.example/', 'B', 2)] });
+  const ins = db.prepare("INSERT INTO opened (url, opened_at) VALUES (?, '2026-01-01T00:00:00Z')");
+  ins.run('https://a.example/'); ins.run('https://b.example/');
+  archive({ db, tabs: [] }); // Safari not running
+  assert.equal(db.prepare('SELECT count(*) n FROM opened').get().n, 2, 'kept for the next real archive');
+  archive({ db, tabs: [tab('https://b.example/', 'B')] });
+  const d = Object.fromEntries(db.prepare('SELECT url, dismissed_at FROM links').all().map((l) => [l.url, l.dismissed_at]));
+  assert.ok(d['https://a.example/'], 'closed by hand');
+  assert.equal(d['https://b.example/'], null, 'still open');
+  assert.equal(db.prepare('SELECT count(*) n FROM opened').get().n, 0);
+});
